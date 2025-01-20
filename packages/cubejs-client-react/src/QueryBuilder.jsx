@@ -8,12 +8,14 @@ import {
   isQueryPresent,
   moveItemInArray,
   movePivotItem,
-  ResultSet
+  validateQuery,
+  ResultSet,
+  removeEmptyQueryFields
 } from '@cubejs-client/core';
 
 import QueryRenderer from './QueryRenderer.jsx';
 import CubeContext from './CubeContext';
-import { generateAnsiHTML } from './utils';
+import { removeEmpty } from './utils';
 
 const granularities = [
   { name: undefined, title: 'w/o grouping' },
@@ -23,11 +25,30 @@ const granularities = [
   { name: 'day', title: 'Day' },
   { name: 'week', title: 'Week' },
   { name: 'month', title: 'Month' },
+  { name: 'quarter', title: 'Quarter' },
   { name: 'year', title: 'Year' },
 ];
 
 export default class QueryBuilder extends React.Component {
   static contextType = CubeContext;
+
+  static defaultProps = {
+    cubeApi: null,
+    stateChangeHeuristics: null,
+    disableHeuristics: false,
+    render: null,
+    wrapWithQueryRenderer: true,
+    defaultChartType: 'line',
+    defaultQuery: {},
+    initialVizState: null,
+    onVizStateChanged: null,
+
+    // deprecated
+    query: null,
+    setQuery: null,
+    vizState: null,
+    setVizState: null,
+  };
 
   // This is an anti-pattern, only kept for backward compatibility
   // https://reactjs.org/blog/2018/06/07/you-probably-dont-need-derived-state.html#anti-pattern-unconditionally-copying-props-to-state
@@ -115,14 +136,14 @@ export default class QueryBuilder extends React.Component {
     const { schemaVersion, onSchemaChange } = this.props;
     const { meta } = this.state;
 
-    if (this.prevContext?.cubejsApi !== this.context?.cubejsApi) {
+    if (this.prevContext?.cubeApi !== this.context?.cubeApi) {
       this.prevContext = this.context;
       await this.fetchMeta();
     }
 
     if (prevProps.schemaVersion !== schemaVersion) {
       try {
-        const newMeta = await this.cubejsApi().meta();
+        const newMeta = await this.cubeApi().meta();
         if (!equals(newMeta, meta) && typeof onSchemaChange === 'function') {
           onSchemaChange({
             schemaVersion,
@@ -139,24 +160,30 @@ export default class QueryBuilder extends React.Component {
   }
 
   fetchMeta = async () => {
-    if (!this.cubejsApi()) {
+    if (!this.cubeApi()) {
       return;
     }
 
     let meta;
     let metaError = null;
+    let richMetaError = null;
+    let metaErrorStack = null;
 
     try {
       this.setState({ isFetchingMeta: true });
-      meta = await this.cubejsApi().meta();
+      meta = await this.cubeApi().meta();
     } catch (error) {
-      metaError = error;
+      metaError = error.response?.plainError || error;
+      richMetaError = error;
+      metaErrorStack = error.response?.stack?.replace(error.message || '', '') || '';
     }
 
     this.setState(
       {
         meta,
-        metaError: metaError ? new Error(generateAnsiHTML(metaError.message || metaError.toString())) : null,
+        metaError: metaError ? new Error(metaError.message || metaError.toString()) : null,
+        richMetaError,
+        metaErrorStack,
         isFetchingMeta: false,
       },
       () => {
@@ -167,10 +194,10 @@ export default class QueryBuilder extends React.Component {
     );
   };
 
-  cubejsApi() {
-    const { cubejsApi } = this.props;
+  cubeApi() {
+    const { cubeApi } = this.props;
     // eslint-disable-next-line react/destructuring-assignment
-    return cubejsApi || (this.context && this.context.cubejsApi);
+    return cubeApi || (this.context && this.context.cubeApi);
   }
 
   getMissingMembers(query, meta) {
@@ -196,20 +223,23 @@ export default class QueryBuilder extends React.Component {
 
   prepareRenderProps(queryRendererProps) {
     const getName = (member) => member.name;
+
     const toTimeDimension = (member) => {
       const rangeSelection = member.compareDateRange
         ? { compareDateRange: member.compareDateRange }
         : { dateRange: member.dateRange };
-      return {
+
+      return removeEmpty({
         dimension: member.dimension.name,
         granularity: member.granularity,
         ...rangeSelection,
-      };
+      });
     };
+
     const toFilter = (member) => ({
       member: member.member?.name || member.dimension?.name,
       operator: member.operator,
-      values: member.values,
+      ...(['set', 'notSet'].includes(member.operator) ? {} : { values: member.values }),
     });
 
     const updateMethods = (memberType, toQuery = getName) => ({
@@ -221,10 +251,9 @@ export default class QueryBuilder extends React.Component {
       },
       remove: (member) => {
         const { query } = this.state;
-        const members = (query[memberType] || []).concat([]);
-        members.splice(member.index, 1);
+
         return this.updateQuery({
-          [memberType]: members,
+          [memberType]: (query[memberType] || []).filter((_, index) => index !== member.index),
         });
       },
       update: (member, updateWith) => {
@@ -240,6 +269,7 @@ export default class QueryBuilder extends React.Component {
     const {
       meta,
       metaError,
+      richMetaError,
       query,
       queryError,
       chartType,
@@ -248,15 +278,14 @@ export default class QueryBuilder extends React.Component {
       missingMembers,
       isFetchingMeta,
       dryRunResponse,
+      metaErrorStack
     } = this.state;
 
-    const flatFilters = uniqBy(
-      prop('member'),
+    const flatFilters = uniqBy((filter) => `${prop('member', filter)}${prop('operator', filter)}`,
       flattenFilters((meta && query.filters) || []).map((filter) => ({
         ...filter,
         member: filter.member || filter.dimension,
-      }))
-    );
+      })));
 
     const filters = flatFilters.map((m, i) => ({
       ...m,
@@ -308,10 +337,15 @@ export default class QueryBuilder extends React.Component {
     }
 
     const activeOrder = Array.isArray(query.order) ? Object.fromEntries(query.order) : query.order;
+    const members = [
+      ...measures,
+      ...dimensions,
+      ...timeDimensions.map(({ dimension }) => dimension)
+    ];
 
     let orderMembers = uniqBy(prop('id'), [
       // uniqBy prefers first, so these will only be added if not already in the query
-      ...measures.concat(dimensions).map(({ name, title }) => ({ id: name, title, order: activeOrder?.[name] || 'none' })),
+      ...members.map(({ name, title }) => ({ id: name, title, order: activeOrder?.[name] || 'none' })),
     ]);
 
     if (this.orderMembersOrderKeys.length !== orderMembers.length) {
@@ -321,12 +355,16 @@ export default class QueryBuilder extends React.Component {
     if (this.orderMembersOrderKeys.length) {
       // Preserve order until the members change or manually re-ordered
       // This is needed so that when an order member becomes active, it doesn't jump to the top of the list
-      orderMembers = (this.orderMembersOrderKeys || []).map((id) => orderMembers.find((member) => member.id === id));
+      orderMembers = (this.orderMembersOrderKeys || [])
+        .map((id) => orderMembers.find((member) => member.id === id))
+        .filter(Boolean);
     }
 
     return {
       meta,
       metaError,
+      richMetaError,
+      metaErrorStack,
       query,
       error: queryError, // Match same name as QueryRenderer prop
       validatedQuery,
@@ -411,10 +449,10 @@ export default class QueryBuilder extends React.Component {
     const { query } = this.state;
 
     this.updateVizState({
-      query: {
+      query: removeEmptyQueryFields({
         ...query,
         ...queryUpdate,
-      },
+      }),
     });
   }
 
@@ -484,7 +522,7 @@ export default class QueryBuilder extends React.Component {
 
     if (shouldFetchDryRun && isQueryPresent(finalState.query) && finalState.missingMembers.length === 0) {
       try {
-        const response = await this.cubejsApi().dryRun(finalState.query, {
+        const response = await this.cubeApi().dryRun(finalState.query, {
           mutexObj: this.mutexObj,
         });
 
@@ -505,7 +543,8 @@ export default class QueryBuilder extends React.Component {
         }
       } catch (error) {
         this.setState({
-          queryError: new Error(generateAnsiHTML(error.message || error.toString())),
+          queryError: new Error(error.response?.plainError || error.message),
+          richQueryError: new Error(error.message || error.toString())
         });
       }
     }
@@ -516,10 +555,7 @@ export default class QueryBuilder extends React.Component {
   validatedQuery(state) {
     const { query } = state || this.state;
 
-    return {
-      ...query,
-      filters: (query.filters || []).filter((f) => f.operator),
-    };
+    return validateQuery(query);
   }
 
   defaultHeuristics(newState) {
@@ -541,13 +577,13 @@ export default class QueryBuilder extends React.Component {
 
   render() {
     const { query } = this.state;
-    const { cubejsApi, render, wrapWithQueryRenderer } = this.props;
+    const { cubeApi, render, wrapWithQueryRenderer } = this.props;
 
     if (wrapWithQueryRenderer) {
       return (
         <QueryRenderer
           query={query}
-          cubejsApi={cubejsApi}
+          cubeApi={cubeApi}
           resetResultSetOnChange={false}
           render={(queryRendererProps) => {
             if (render) {
@@ -565,21 +601,3 @@ export default class QueryBuilder extends React.Component {
     }
   }
 }
-
-QueryBuilder.defaultProps = {
-  cubejsApi: null,
-  stateChangeHeuristics: null,
-  disableHeuristics: false,
-  render: null,
-  wrapWithQueryRenderer: true,
-  defaultChartType: 'line',
-  defaultQuery: {},
-  initialVizState: null,
-  onVizStateChanged: null,
-
-  // deprecated
-  query: null,
-  setQuery: null,
-  vizState: null,
-  setVizState: null,
-};

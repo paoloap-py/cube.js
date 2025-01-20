@@ -1,5 +1,6 @@
 /* eslint-disable global-require,no-restricted-syntax */
 import dotenv from '@cubejs-backend/dotenv';
+import { CubePreAggregationConverter, CubeSchemaConverter, ScaffoldingTemplate, SchemaFormat } from '@cubejs-backend/schema-compiler';
 import spawn from 'cross-spawn';
 import path from 'path';
 import fs from 'fs-extra';
@@ -10,13 +11,13 @@ import jwt from 'jsonwebtoken';
 import isDocker from 'is-docker';
 import type { Application as ExpressApplication, Request, Response } from 'express';
 import type { ChildProcess } from 'child_process';
-import { executeCommand, packageExists } from '@cubejs-backend/shared';
+import { executeCommand, getEnv, keyByDataSource, packageExists } from '@cubejs-backend/shared';
 import crypto from 'crypto';
 
 import type { BaseDriver } from '@cubejs-backend/query-orchestrator';
 
-import { CubejsServerCore, ServerCoreInitializedOptions } from './server';
-import { ExternalDbTypeFn } from './types';
+import { CubejsServerCore } from './server';
+import { ExternalDbTypeFn, ServerCoreInitializedOptions, DatabaseType } from './types';
 import DriverDependencies from './DriverDependencies';
 
 const repo = {
@@ -76,9 +77,35 @@ export class DevServer {
       try {
         await handler(req, res, next);
       } catch (e) {
-        console.error((e.stack || e).toString());
-        this.cubejsServer.event('Dev Server Error', { error: (e.stack || e).toString() });
-        res.status(500).json({ error: (e.stack || e).toString() });
+        const errorString = ((e as Error).stack || e).toString();
+        console.error(errorString);
+        this.cubejsServer.event('Dev Server Error', { error: errorString });
+
+        // We don't know what state response is left at here:
+        // It could be corked, headers could be sent, body could be sent completely or partially
+
+        // Also, because we pass `next` to handler without any wrapper we don't know if it was called or not
+        // Hence, we shouldn't call it for error handling
+
+        try {
+          while (res.writableCorked > 0) {
+            res.uncork();
+          }
+
+          if (res.writableEnded) {
+            // There's nothing we can do for response, error happened after call to end()
+          } else if (res.headersSent) {
+            // If header is already sent, we can't alter any of it, so best we can do is just terminate body
+            res.end();
+          } else {
+            res.status(500).json({ error: errorString });
+          }
+        } catch (send500Error) {
+          const send500ErrorString = ((send500Error as Error).stack || send500Error).toString();
+          console.error(send500ErrorString);
+          this.cubejsServer.event('Dev Server Error', { error: send500ErrorString });
+          res.destroy(send500Error);
+        }
       }
     };
 
@@ -97,7 +124,8 @@ export class DevServer {
         livePreview: options.livePreview,
         isDocker: isDocker(),
         telemetry: options.telemetry,
-        identifier: this.getIdentifier(options.apiSecret)
+        identifier: this.getIdentifier(options.apiSecret),
+        previewFeatures: getEnv('previewFeatures'),
       });
     }));
 
@@ -111,6 +139,7 @@ export class DevServer {
       });
 
       const tablesSchema = await driver.tablesSchema();
+
       this.cubejsServer.event('Dev Server DB Schema Load Success');
       if (Object.keys(tablesSchema || {}).length === 0) {
         this.cubejsServer.event('Dev Server DB Schema Load Empty');
@@ -149,13 +178,50 @@ export class DevServer {
       });
       const tablesSchema = req.body.tablesSchema || (await driver.tablesSchema());
 
-      const ScaffoldingTemplate = require('@cubejs-backend/schema-compiler/scaffolding/ScaffoldingTemplate');
-      const scaffoldingTemplate = new ScaffoldingTemplate(tablesSchema, driver);
+      if (!Object.values(SchemaFormat).includes(req.body.format)) {
+        throw new Error(`Unknown schema format. Must be one of ${Object.values(SchemaFormat)}`);
+      }
+
+      const scaffoldingTemplate = new ScaffoldingTemplate(tablesSchema, driver, {
+        format: req.body.format,
+        snakeCase: true
+      });
       const files = scaffoldingTemplate.generateFilesByTableNames(req.body.tables, { dataSource });
 
-      const schemaPath = options.schemaPath || 'schema';
+      await fs.emptyDir(path.join(options.schemaPath, 'cubes'));
+      await fs.emptyDir(path.join(options.schemaPath, 'views'));
 
-      await Promise.all(files.map(file => fs.writeFile(path.join(schemaPath, file.fileName), file.content)));
+      await fs.writeFile(path.join(options.schemaPath, 'views', 'example_view.yml'), `# In Cube, views are used to expose slices of your data graph and act as data marts.
+# You can control which measures and dimensions are exposed to BIs or data apps,
+# as well as the direction of joins between the exposed cubes.
+# You can learn more about views in documentation here - https://cube.dev/docs/schema/reference/view
+
+
+# The following example shows a view defined on top of orders and customers cubes.
+# Both orders and customers cubes are exposed using the "includes" parameter to
+# control which measures and dimensions are exposed.
+# Prefixes can also be applied when exposing measures or dimensions.
+# In this case, the customers' city dimension is prefixed with the cube name,
+# resulting in "customers_city" when querying the view.
+
+# views:
+#   - name: example_view
+#
+#     cubes:
+#       - join_path: orders
+#         includes:
+#           - status
+#           - created_date
+#
+#           - total_amount
+#           - count
+#
+#       - join_path: orders.customers
+#         prefix: true
+#         includes:
+#           - city`);
+      await Promise.all(files.map(file => fs.writeFile(path.join(options.schemaPath, 'cubes', file.fileName), file.content)));
+
       res.json({ files });
     }));
 
@@ -295,7 +361,7 @@ export class DevServer {
             { cwd: path.resolve('.') }
           );
         } catch (error) {
-          driverError = error;
+          driverError = error as Error;
         } finally {
           driverPromise = null;
         }
@@ -378,12 +444,12 @@ export class DevServer {
       res.json(await fetcher.manifestJSON());
     }));
 
-    app.get('/playground/live-preview/start/:token', catchErrors(async (req, res) => {
+    app.get('/playground/live-preview/start/:token', catchErrors(async (req: Request, res: Response) => {
       this.livePreviewWatcher.setAuth(req.params.token);
       this.livePreviewWatcher.startWatch();
 
       res.setHeader('Content-Type', 'text/html');
-      res.write('<html><head><script>window.close();</script></body></html>');
+      res.write('<html><body><script>window.close();</script></body></html>');
       res.end();
     }));
 
@@ -412,48 +478,77 @@ export class DevServer {
       }
     }));
 
-    app.post('/playground/test-connection', catchErrors(async (req, res) => {
-      const { variables = {} } = req.body || {};
+    /**
+     * The `/playground/test-connection` endpoint request.
+     */
+    type TestConnectionRequest = {
+      body: {
+        dataSource?: string,
+        variables: {
+          [env: string]: string,
+        },
+      },
+    };
 
-      let driver: BaseDriver|null = null;
+    app.post('/playground/test-connection', catchErrors(
+      async (req: TestConnectionRequest, res) => {
+        const { dataSource, variables } = req.body || {};
 
-      try {
-        if (!variables.CUBEJS_DB_TYPE) {
-          throw new Error('CUBEJS_DB_TYPE is required');
-        }
+        // With multiple data sources enabled, we need to use
+        // CUBEJS_DS_<dataSource>_DB_TYPE environment variable
+        // instead of CUBEJS_DB_TYPE.
+        const type = keyByDataSource('CUBEJS_DB_TYPE', dataSource);
 
-        // Backup env variables for restoring
-        const originalProcessEnv = process.env;
-        process.env = {
-          ...process.env,
-        };
+        let driver: BaseDriver | null = null;
 
-        for (const [envName, value] of Object.entries(variables)) {
-          process.env[envName] = <string>value;
-        }
+        try {
+          if (!variables || !variables[type]) {
+            throw new Error(`${type} is required`);
+          }
 
-        driver = CubejsServerCore.createDriver(variables.CUBEJS_DB_TYPE);
+          // Backup env variables for restoring
+          const originalProcessEnv = process.env;
+          process.env = {
+            ...process.env,
+          };
 
-        // Restore original process.env
-        process.env = originalProcessEnv;
+          // We suppose that variables names passed to the endpoint have their
+          // final form depending on whether multiple data sources are enabled
+          // or not. So, we don't need to convert anything here.
+          for (const [envName, value] of Object.entries(variables)) {
+            process.env[envName] = <string>value;
+          }
 
-        await driver.testConnection();
+          // With multiple data sources enabled, we need to put the dataSource
+          // parameter to the driver instance to read an appropriate set of
+          // driver configuration parameters. It can be undefined if multiple
+          // data source is disabled.
+          driver = CubejsServerCore.createDriver(
+            <DatabaseType>variables[type],
+            { dataSource },
+          );
 
-        this.cubejsServer.event('test_database_connection_success');
+          // Restore original process.env
+          process.env = originalProcessEnv;
 
-        return res.json('ok');
-      } catch (error) {
-        this.cubejsServer.event('test_database_connection_error');
+          await driver.testConnection();
 
-        return res.status(400).json({
-          error: error.toString()
-        });
-      } finally {
-        if (driver && (<any>driver).release) {
-          await (<any>driver).release();
+          this.cubejsServer.event('test_database_connection_success');
+
+          return res.json('ok');
+        } catch (error) {
+          this.cubejsServer.event('test_database_connection_error');
+
+          return res.status(400).json({
+            error: error.toString()
+          });
+        } finally {
+          if (driver && (<any>driver).release) {
+            await (<any>driver).release();
+          }
         }
       }
-    }));
+    ));
 
     app.post('/playground/env', catchErrors(async (req, res) => {
       let { variables = {} } = req.body || {};
@@ -462,19 +557,40 @@ export class DevServer {
         variables.CUBEJS_API_SECRET = options.apiSecret;
       }
 
-      // CUBEJS_EXTERNAL_DEFAULT will be default in next major version, let's test it with docker too
+      let envs: Record<string, string> = {};
+      const envPath = path.join(process.cwd(), '.env');
+      if (fs.existsSync(envPath)) {
+        envs = dotenv.parse(fs.readFileSync(envPath));
+      }
+
+      const schemaPath = envs.CUBEJS_SCHEMA_PATH || process.env.CUBEJS_SCHEMA_PATH || 'model';
+
       variables.CUBEJS_EXTERNAL_DEFAULT = 'true';
       variables.CUBEJS_SCHEDULED_REFRESH_DEFAULT = 'true';
       variables.CUBEJS_DEV_MODE = 'true';
+      variables.CUBEJS_SCHEMA_PATH = schemaPath;
       variables = Object.entries(variables).map(([key, value]) => ([key, value].join('=')));
 
-      const repositoryPath = path.join(process.cwd(), options.schemaPath);
+      const repositoryPath = path.join(process.cwd(), schemaPath);
 
       if (!fs.existsSync(repositoryPath)) {
         fs.mkdirSync(repositoryPath);
       }
 
       fs.writeFileSync(path.join(process.cwd(), '.env'), variables.join('\n'));
+
+      if (!fs.existsSync(path.join(process.cwd(), 'package.json'))) {
+        fs.writeFileSync(
+          path.join(process.cwd(), 'package.json'),
+          JSON.stringify({
+            name: 'cube-docker',
+            version: '0.0.1',
+            private: true,
+            createdAt: new Date().toJSON(),
+            dependencies: {}
+          }, null, 2)
+        );
+      }
 
       dotenv.config({ override: true });
 
@@ -491,6 +607,32 @@ export class DevServer {
 
       res.json({ token });
     }));
+
+    app.post('/playground/schema/pre-aggregation', catchErrors(async (req: Request, res: Response) => {
+      const { cubeName, preAggregationName, code } = req.body;
+
+      const schemaConverter = new CubeSchemaConverter(this.cubejsServer.repository, [
+        new CubePreAggregationConverter({
+          cubeName,
+          preAggregationName,
+          code
+        })
+      ]);
+
+      try {
+        await schemaConverter.generate();
+      } catch (error) {
+        return res.status(400).json({ error: (error as Error).message || error });
+      }
+
+      schemaConverter.getSourceFiles().forEach(({ cubeName: currentCubeName, fileName, source }) => {
+        if (currentCubeName === cubeName) {
+          this.cubejsServer.repository.writeDataSchemaFile(fileName, source);
+        }
+      });
+
+      return res.json('ok');
+    }));
   }
 
   protected getIdentifier(apiSecret: string): string {
@@ -498,6 +640,6 @@ export class DevServer {
       .update(apiSecret)
       .digest('hex')
       .replace(/[^\d]/g, '')
-      .substr(0, 10);
+      .slice(0, 10);
   }
 }

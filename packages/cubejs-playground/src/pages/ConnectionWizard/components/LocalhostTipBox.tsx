@@ -1,13 +1,8 @@
-import { Alert, Button, Form, Input, Space, Typography } from 'antd';
-import { CopyOutlined } from '@ant-design/icons';
+import { Alert, Form, Space, Typography } from 'antd';
 import styled from 'styled-components';
-import { InputProps } from 'antd/lib/input/Input';
-import { copyToClipboard } from '../../../utils';
 
-const IconButton: typeof Button = styled(Button)`
-  border: none;
-  color: var(--primary-1);
-`;
+import { CopiableInput } from '../../../components/CopiableInput';
+import { copyToClipboard } from '../../../utils';
 
 const StyledAlert: typeof Alert = styled(Alert)`
   border: none;
@@ -27,41 +22,6 @@ const StyledForm: typeof Form = styled(Form)`
     padding-bottom: 4px;
   }
 `;
-
-type TCopiableInputProps = {
-  label?: string;
-  onCopyClick: (value: string) => void;
-} & InputProps;
-
-function CopiableInput({
-  label,
-  value,
-  onCopyClick,
-  ...props
-}: TCopiableInputProps) {
-  const suffix = (
-    <IconButton
-      data-testid={`localhost-tipbox-${label?.toLowerCase()}-copy-btn`}
-      icon={<CopyOutlined />}
-      onClick={() => value && onCopyClick(value.toString())}
-    />
-  );
-
-  return (
-    <Form.Item
-      label={label ? <b>{label}</b> : null}
-      labelCol={{ span: 24 }}
-      wrapperCol={{ span: 24 }}
-    >
-      <Input
-        data-testid={`localhost-tipbox-${label?.toLowerCase()}-input`}
-        value={value}
-        suffix={suffix}
-        {...props}
-      />
-    </Form.Item>
-  );
-}
 
 type TLocalhostTipBoxProps = {
   onHostnameCopy: (value: string) => void;
@@ -100,7 +60,7 @@ export function LocalhostTipBox({ onHostnameCopy }: TLocalhostTipBoxProps) {
 
             <Space direction="vertical" size="middle">
               <Typography.Text>
-                Please note, for Linux, you need to run Cube.js Docker container
+                Please note, for Linux, you need to run Cube Docker container
                 in the{' '}
                 <Typography.Link
                   href="https://docs.docker.com/network/host/"

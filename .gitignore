@@ -2,11 +2,13 @@ node_modules
 .yarn
 .yarnrc
 /.idea
+/.vscode
 newrelic_agent.log
 .ruby-version
 /.DS_Store
 .DS_Store
 package-lock.json
+pnpm-lock.yaml
 examples/examples-gallery/build
 yarn-error.log
 .gh-token
@@ -17,3 +19,8 @@ yarn-error.log
 lerna-debug.log
 tsconfig.tsbuildinfo
 .tool-versions
+testings/
+rust/cubesql/profile.json
+.cubestore
+.env
+.vimspector.json

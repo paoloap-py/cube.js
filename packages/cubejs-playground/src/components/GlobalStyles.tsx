@@ -1,6 +1,6 @@
 import { createGlobalStyle } from 'styled-components';
 
-import { CSS_PROPERTIES } from '../variables-esm';
+import { CSS_PROPERTIES } from '../variables';
 
 const GlobalStyles = createGlobalStyle`
   body {
@@ -104,10 +104,6 @@ const GlobalStyles = createGlobalStyle`
   code {
     font-family: source-code-pro, Menlo, Monaco, Consolas, "Courier New",
     monospace;
-  }
-
-  #playground-root {
-    height: 100%;
   }
 
   .schema-sidebar,
@@ -257,6 +253,89 @@ const GlobalStyles = createGlobalStyle`
   a.ant-typography {
     text-decoration: underline;
   }
+  
+  .ant-notification {
+    z-index: 9999;
+  }
+  
+  .ant-modal-header {
+    padding: 16px 24px;
+  }
+  
+  .ant-modal-body {
+    padding: 24px;
+  }
+
+  // Fix close tab button styles
+  .ant-tabs-dropdown {
+    & .ant-tabs-dropdown-menu-item {
+      display: flex;
+      place-content: center space-between;
+    }
+    
+    & button.ant-tabs-dropdown-menu-item-remove {
+      -webkit-appearance: none;
+      padding: 0;
+      border: none;
+      border-radius: var(--border-radius-base);
+      background: transparent;
+      color: var(--dark-color);
+      cursor: pointer;
+      transition: color .125s linear;
+    }
+    
+    & button.ant-tabs-dropdown-menu-item-remove:hover {
+      color: var(--purple-color);
+    }
+  }
+  
+  .ant-tabs {
+    overflow: visible;
+  } 
+  
+  .test {
+    .ant-dropdown-menu-item {
+      clear: both;
+      margin: 0;
+      padding: 5px 12px;
+      color: #5b5c7d;
+      font-weight: 400;
+      font-size: 14px;
+      line-height: 22px;
+      white-space: nowrap;
+      cursor: pointer;
+      transition: all .3s;  
+      height: auto;
+      margin-bottom: 0 !important;
+      padding-left: 24px;
+    }
+    
+    .ant-dropdown-menu-item.ant-menu-item-active {
+      background: rgb(243, 243, 251);
+    }
+    
+    .ant-dropdown-menu-item-group-list {
+      margin: 0 8px;
+      padding: 0;
+      list-style: none;
+    }    
+    
+    .ant-menu-item-group-title {
+      font-size: 15px;
+    }
+  }
+  
+  .simple-overlay {
+    .ant-dropdown-menu-item {
+      padding-left: 8px;
+    }
+  }
+  
+  .cube-section {
+    .ant-btn-icon-only {
+      height: 100% !important;
+    }
+  }  
 `;
 
 export default GlobalStyles;

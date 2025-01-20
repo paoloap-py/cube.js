@@ -3,6 +3,663 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [1.1.12](https://github.com/cube-js/cube.js/compare/v1.1.11...v1.1.12) (2025-01-09)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+# [1.0.0](https://github.com/cube-js/cube.js/compare/v0.36.11...v1.0.0) (2024-10-15)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+## [0.36.4](https://github.com/cube-js/cube.js/compare/v0.36.3...v0.36.4) (2024-09-27)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+## [0.36.2](https://github.com/cube-js/cube.js/compare/v0.36.1...v0.36.2) (2024-09-18)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+# [0.36.0](https://github.com/cube-js/cube.js/compare/v0.35.81...v0.36.0) (2024-09-13)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+## [0.35.23](https://github.com/cube-js/cube.js/compare/v0.35.22...v0.35.23) (2024-04-25)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+# [0.35.0](https://github.com/cube-js/cube.js/compare/v0.34.62...v0.35.0) (2024-03-14)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+## [0.34.60](https://github.com/cube-js/cube.js/compare/v0.34.59...v0.34.60) (2024-03-02)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+## [0.34.37](https://github.com/cube-js/cube.js/compare/v0.34.36...v0.34.37) (2023-12-19)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+## [0.34.32](https://github.com/cube-js/cube.js/compare/v0.34.31...v0.34.32) (2023-12-07)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+## [0.34.31](https://github.com/cube-js/cube.js/compare/v0.34.30...v0.34.31) (2023-12-07)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+## [0.34.27](https://github.com/cube-js/cube.js/compare/v0.34.26...v0.34.27) (2023-11-30)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+## [0.34.24](https://github.com/cube-js/cube.js/compare/v0.34.23...v0.34.24) (2023-11-23)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+## [0.34.19](https://github.com/cube-js/cube.js/compare/v0.34.18...v0.34.19) (2023-11-11)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+## [0.34.9](https://github.com/cube-js/cube.js/compare/v0.34.8...v0.34.9) (2023-10-26)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+## [0.34.2](https://github.com/cube-js/cube.js/compare/v0.34.1...v0.34.2) (2023-10-12)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+## [0.34.1](https://github.com/cube-js/cube.js/compare/v0.34.0...v0.34.1) (2023-10-09)
+
+
+### Bug Fixes
+
+* **@cubejs-client/vue:** Do not add time dimension as order member if granularity is set to `none` ([#7165](https://github.com/cube-js/cube.js/issues/7165)) ([1557be6](https://github.com/cube-js/cube.js/commit/1557be6aa5a6a081578c54c48446815d9be37db6))
+
+
+
+
+
+# [0.34.0](https://github.com/cube-js/cube.js/compare/v0.33.65...v0.34.0) (2023-10-03)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+## [0.33.65](https://github.com/cube-js/cube.js/compare/v0.33.64...v0.33.65) (2023-10-02)
+
+
+### Bug Fixes
+
+* **@cubejs-client/vue:** Pivot config can use null from heuristics ([#7167](https://github.com/cube-js/cube.js/issues/7167)) ([e7043bb](https://github.com/cube-js/cube.js/commit/e7043bb41099d2c4477430b96a20c562e1908266))
+
+
+
+
+
+## [0.33.59](https://github.com/cube-js/cube.js/compare/v0.33.58...v0.33.59) (2023-09-20)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+## [0.33.58](https://github.com/cube-js/cube.js/compare/v0.33.57...v0.33.58) (2023-09-18)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+## [0.33.55](https://github.com/cube-js/cube.js/compare/v0.33.54...v0.33.55) (2023-09-12)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+## [0.33.47](https://github.com/cube-js/cube.js/compare/v0.33.46...v0.33.47) (2023-08-15)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+## [0.33.44](https://github.com/cube-js/cube.js/compare/v0.33.43...v0.33.44) (2023-08-11)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+## [0.33.12](https://github.com/cube-js/cube.js/compare/v0.33.11...v0.33.12) (2023-05-22)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+# [0.33.0](https://github.com/cube-js/cube.js/compare/v0.32.31...v0.33.0) (2023-05-02)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+## [0.32.30](https://github.com/cube-js/cube.js/compare/v0.32.29...v0.32.30) (2023-04-28)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+## [0.32.22](https://github.com/cube-js/cube.js/compare/v0.32.21...v0.32.22) (2023-04-10)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+## [0.32.17](https://github.com/cube-js/cube.js/compare/v0.32.16...v0.32.17) (2023-03-29)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+## [0.32.12](https://github.com/cube-js/cube.js/compare/v0.32.11...v0.32.12) (2023-03-22)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+# [0.32.0](https://github.com/cube-js/cube.js/compare/v0.31.69...v0.32.0) (2023-03-02)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+## [0.31.63](https://github.com/cube-js/cube.js/compare/v0.31.62...v0.31.63) (2023-02-20)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+## [0.31.46](https://github.com/cube-js/cube.js/compare/v0.31.45...v0.31.46) (2023-01-18)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+## [0.31.35](https://github.com/cube-js/cube.js/compare/v0.31.34...v0.31.35) (2023-01-07)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+## [0.31.34](https://github.com/cube-js/cube.js/compare/v0.31.33...v0.31.34) (2023-01-05)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+## [0.31.33](https://github.com/cube-js/cube.js/compare/v0.31.32...v0.31.33) (2023-01-03)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+## [0.31.30](https://github.com/cube-js/cube.js/compare/v0.31.29...v0.31.30) (2022-12-22)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+## [0.31.15](https://github.com/cube-js/cube.js/compare/v0.31.14...v0.31.15) (2022-11-17)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+## [0.31.13](https://github.com/cube-js/cube.js/compare/v0.31.12...v0.31.13) (2022-11-08)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+## [0.31.9](https://github.com/cube-js/cube.js/compare/v0.31.8...v0.31.9) (2022-11-01)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+## [0.31.8](https://github.com/cube-js/cube.js/compare/v0.31.7...v0.31.8) (2022-10-30)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+# [0.31.0](https://github.com/cube-js/cube.js/compare/v0.30.75...v0.31.0) (2022-10-03)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+## [0.30.74](https://github.com/cube-js/cube.js/compare/v0.30.73...v0.30.74) (2022-09-20)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+## [0.30.64](https://github.com/cube-js/cube.js/compare/v0.30.63...v0.30.64) (2022-09-07)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+## [0.30.60](https://github.com/cube-js/cube.js/compare/v0.30.59...v0.30.60) (2022-08-28)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+## [0.30.54](https://github.com/cube-js/cube.js/compare/v0.30.53...v0.30.54) (2022-08-19)
+
+
+### Bug Fixes
+
+* **@cubejs-client/vue3:** avoid setQuery Vue3 warnings ([#5084](https://github.com/cube-js/cube.js/issues/5084)) ([#5120](https://github.com/cube-js/cube.js/issues/5120)) ([d380da4](https://github.com/cube-js/cube.js/commit/d380da4e2db09c3eccd8d175287db314568638b1))
+
+
+### Features
+
+* **@cubejs-client/vue3:** support logical operator filters ([#2950](https://github.com/cube-js/cube.js/issues/2950)) ([#5119](https://github.com/cube-js/cube.js/issues/5119)) ([077bb75](https://github.com/cube-js/cube.js/commit/077bb75ac529bf2c32a1e525ba23724a15733aa1))
+
+
+
+
+
+## [0.30.46](https://github.com/cube-js/cube.js/compare/v0.30.45...v0.30.46) (2022-08-10)
+
+
+### Bug Fixes
+
+* **@cubejs-client/vue3:** fix removeOffset warning ([#5082](https://github.com/cube-js/cube.js/issues/5082)) ([#5083](https://github.com/cube-js/cube.js/issues/5083)) ([e1d427b](https://github.com/cube-js/cube.js/commit/e1d427b84aa0b484c9d255b536a4a0b2abab6054))
+
+
+
+
+
+## [0.30.29](https://github.com/cube-js/cube.js/compare/v0.30.28...v0.30.29) (2022-07-01)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+## [0.30.4](https://github.com/cube-js/cube.js/compare/v0.30.3...v0.30.4) (2022-05-20)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+# [0.30.0](https://github.com/cube-js/cube.js/compare/v0.29.57...v0.30.0) (2022-05-11)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+## [0.29.54](https://github.com/cube-js/cube.js/compare/v0.29.53...v0.29.54) (2022-05-03)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+## [0.29.53](https://github.com/cube-js/cube.js/compare/v0.29.52...v0.29.53) (2022-04-29)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+## [0.29.51](https://github.com/cube-js/cube.js/compare/v0.29.50...v0.29.51) (2022-04-22)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+## [0.29.48](https://github.com/cube-js/cube.js/compare/v0.29.47...v0.29.48) (2022-04-14)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+## [0.29.43](https://github.com/cube-js/cube.js/compare/v0.29.42...v0.29.43) (2022-04-07)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+## [0.29.42](https://github.com/cube-js/cube.js/compare/v0.29.41...v0.29.42) (2022-04-04)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+## [0.29.33](https://github.com/cube-js/cube.js/compare/v0.29.32...v0.29.33) (2022-03-17)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+## [0.29.29](https://github.com/cube-js/cube.js/compare/v0.29.28...v0.29.29) (2022-03-03)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+## [0.29.23](https://github.com/cube-js/cube.js/compare/v0.29.22...v0.29.23) (2022-01-26)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+## [0.29.8](https://github.com/cube-js/cube.js/compare/v0.29.7...v0.29.8) (2021-12-21)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+## [0.29.5](https://github.com/cube-js/cube.js/compare/v0.29.4...v0.29.5) (2021-12-17)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+# [0.29.0](https://github.com/cube-js/cube.js/compare/v0.28.67...v0.29.0) (2021-12-14)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+## [0.28.57](https://github.com/cube-js/cube.js/compare/v0.28.56...v0.28.57) (2021-11-16)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+## [0.28.52](https://github.com/cube-js/cube.js/compare/v0.28.51...v0.28.52) (2021-11-03)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+## [0.28.45](https://github.com/cube-js/cube.js/compare/v0.28.44...v0.28.45) (2021-10-19)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+## [0.28.38](https://github.com/cube-js/cube.js/compare/v0.28.37...v0.28.38) (2021-09-20)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+## [0.28.37](https://github.com/cube-js/cube.js/compare/v0.28.36...v0.28.37) (2021-09-17)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+## [0.28.35](https://github.com/cube-js/cube.js/compare/v0.28.34...v0.28.35) (2021-09-13)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+## [0.28.25](https://github.com/cube-js/cube.js/compare/v0.28.24...v0.28.25) (2021-08-20)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+## [0.28.24](https://github.com/cube-js/cube.js/compare/v0.28.23...v0.28.24) (2021-08-19)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+## [0.28.17](https://github.com/cube-js/cube.js/compare/v0.28.16...v0.28.17) (2021-08-11)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+## [0.28.15](https://github.com/cube-js/cube.js/compare/v0.28.14...v0.28.15) (2021-08-06)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+## [0.28.10](https://github.com/cube-js/cube.js/compare/v0.28.9...v0.28.10) (2021-07-30)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+## [0.28.9](https://github.com/cube-js/cube.js/compare/v0.28.8...v0.28.9) (2021-07-29)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+## [0.28.6](https://github.com/cube-js/cube.js/compare/v0.28.5...v0.28.6) (2021-07-22)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+## [0.28.1](https://github.com/cube-js/cube.js/compare/v0.28.0...v0.28.1) (2021-07-19)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+# [0.28.0](https://github.com/cube-js/cube.js/compare/v0.27.53...v0.28.0) (2021-07-17)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+## [0.27.51](https://github.com/cube-js/cube.js/compare/v0.27.50...v0.27.51) (2021-07-13)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+## [0.27.48](https://github.com/cube-js/cube.js/compare/v0.27.47...v0.27.48) (2021-07-08)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
+## [0.27.47](https://github.com/cube-js/cube.js/compare/v0.27.46...v0.27.47) (2021-07-06)
+
+**Note:** Version bump only for package @cubejs-client/vue3
+
+
+
+
+
 ## [0.27.41](https://github.com/cube-js/cube.js/compare/v0.27.40...v0.27.41) (2021-06-25)
 
 **Note:** Version bump only for package @cubejs-client/vue3

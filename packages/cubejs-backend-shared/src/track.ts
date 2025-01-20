@@ -17,7 +17,7 @@ export type Event = BaseEvent & {
   sentFrom: 'backend';
 };
 
-let flushPromise: Promise<any>|null = null;
+let flushPromise: Promise<any> | null = null;
 let trackEvents: Array<Event> = [];
 
 async function flush(toFlush?: Array<Event>, retries: number = 10): Promise<any> {
@@ -48,7 +48,7 @@ async function flush(toFlush?: Array<Event>, retries: number = 10): Promise<any>
     }
 
     // console.log(await result.json());
-  } catch (e) {
+  } catch (e: any) {
     if (retries > 0) {
       // eslint-disable-next-line consistent-return
       return flush(toFlush, retries - 1);
@@ -62,7 +62,7 @@ let anonymousId: string = 'unknown';
 
 try {
   anonymousId = machineIdSync();
-} catch (e) {
+} catch (e: any) {
   internalExceptions(e);
 }
 

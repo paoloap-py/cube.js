@@ -1,10 +1,9 @@
+import Icon, { ThunderboltFilled } from '@ant-design/icons';
+import { Alert, Button, Space, Typography } from 'antd';
 import styled from 'styled-components';
-import { Alert, Button, Modal, Space, Typography } from 'antd';
-import { useState } from 'react';
-import Icon from '@ant-design/icons';
 
-import { LightningIcon } from '../../../shared/icons/LightningIcon';
-import { PreAggregationHelper } from './PreAggregationHelper';
+import { useServerCoreVersionGte } from '../../../hooks';
+import { useRollupDesignerContext } from '../../../rollup-designer';
 import { QueryStatus } from './PlaygroundQueryBuilder';
 
 const Badge = styled.div`
@@ -15,16 +14,20 @@ const Badge = styled.div`
   background: var(--warning-bg-color);
 `;
 
-type PreAggregationStatusProps = QueryStatus;
+type PreAggregationStatusProps = Pick<
+  QueryStatus,
+  'preAggregationType' | 'isAggregated' | 'external' | 'extDbType'
+>;
 
 export function PreAggregationStatus({
   isAggregated,
-  transformedQuery,
   external,
   extDbType,
   preAggregationType,
 }: PreAggregationStatusProps) {
-  const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
+  const isVersionGte = useServerCoreVersionGte('0.28.4');
+  const { toggleModal } = useRollupDesignerContext();
+
   // hide it for the time being
   // const renderTime = () => (
   //   <Typography.Text strong style={{ color: 'rgba(20, 20, 70, 0.85)' }}>
@@ -40,7 +43,7 @@ export function PreAggregationStatus({
             <Space size={4}>
               <Icon
                 style={{ color: 'var(--warning-color)' }}
-                component={() => <LightningIcon />}
+                component={() => <ThunderboltFilled />}
               />
             </Space>
           </Badge>
@@ -50,11 +53,15 @@ export function PreAggregationStatus({
           <Typography.Text>
             Query was accelerated with pre-aggregation
           </Typography.Text>
-        ) : (
-          <Button type="link" onClick={() => setIsModalOpen(true)}>
+        ) : isVersionGte ? (
+          <Button
+            data-testid="not-pre-agg-query-btn"
+            type="link"
+            onClick={() => toggleModal()}
+          >
             Query was not accelerated with pre-aggregation {'->'}
           </Button>
-        )}
+        ) : null}
 
         {isAggregated && external && extDbType !== 'cubestore' ? (
           <Alert
@@ -76,22 +83,6 @@ export function PreAggregationStatus({
           />
         ) : null}
       </Space>
-
-      <Modal
-        title="Pre-aggregation"
-        visible={isModalOpen}
-        footer={null}
-        bodyStyle={{
-          paddingTop: 16,
-        }}
-        onCancel={() => {
-          setIsModalOpen(false);
-        }}
-      >
-        {transformedQuery ? (
-          <PreAggregationHelper transformedQuery={transformedQuery} />
-        ) : null}
-      </Modal>
     </>
   );
 }

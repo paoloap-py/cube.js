@@ -1,5 +1,6 @@
 import path from 'path';
 import fs from 'fs';
+import fsAsync from 'fs/promises';
 import vm from 'vm';
 import color from '@oclif/color';
 import dotenv from '@cubejs-backend/dotenv';
@@ -7,11 +8,13 @@ import { parse as semverParse, SemVer, compare as semverCompare } from 'semver';
 import {
   displayCLIWarning,
   getEnv,
-  isDockerImage,
+  isDockerImage, isNativeSupported,
   packageExists,
   PackageManifest,
   resolveBuiltInPackageVersion,
 } from '@cubejs-backend/shared';
+import { SystemOptions } from '@cubejs-backend/server-core';
+import { isFallbackBuild, pythonLoadConfig } from '@cubejs-backend/native';
 
 import {
   getMajorityVersion,
@@ -23,7 +26,7 @@ import {
 import { CreateOptions, CubejsServer } from '../server';
 import type { TypescriptCompiler as TypescriptCompilerType } from './typescript-compiler';
 
-function safetyParseSemver(version: string|null) {
+function safetyParseSemver(version: string | null) {
   if (version) {
     return semverParse(version);
   }
@@ -135,22 +138,24 @@ export class ServerContainer {
       return;
     }
 
-    /**
-     * It's needed to detect case when user didnt install @cubejs-backend/server, but
-     * install @cubejs-backend/postgres-driver and it doesn't fit to built-in server
-     */
-    const depsToCompareVersions = Object.keys(manifest.devDependencies).filter(
-      isCubeNotServerPackage
-    );
-    // eslint-disable-next-line no-restricted-syntax
-    for (const pkgName of depsToCompareVersions) {
-      const pkgVersion = safetyParseSemver(
-        lock.resolveVersion(pkgName)
+    if (manifest.devDependencies) {
+      /**
+       * It's needed to detect case when user didnt install @cubejs-backend/server, but
+       * install @cubejs-backend/postgres-driver and it doesn't fit to built-in server
+       */
+      const depsToCompareVersions = Object.keys(manifest.devDependencies).filter(
+        isCubeNotServerPackage
       );
-      if (pkgVersion) {
-        this.compareBuiltInAndUserVersions(builtInCoreVersion, pkgVersion);
+      // eslint-disable-next-line no-restricted-syntax
+      for (const pkgName of depsToCompareVersions) {
+        const pkgVersion = safetyParseSemver(
+          lock.resolveVersion(pkgName)
+        );
+        if (pkgVersion) {
+          this.compareBuiltInAndUserVersions(builtInCoreVersion, pkgVersion);
 
-        return;
+          return;
+        }
       }
     }
   }
@@ -229,16 +234,14 @@ export class ServerContainer {
       configuration.scheduledRefreshTimer = false;
     }
 
-    const server = new CubejsServer(configuration, {
-      isCubeConfigEmpty
-    });
+    const server = this.createServer(configuration, { isCubeConfigEmpty });
 
     if (!embedded) {
       try {
         const { version, port } = await server.listen();
 
-        console.log(`🚀 Cube.js server (${version}) is listening on ${port}`);
-      } catch (e) {
+        console.log(`🚀 Cube API server (${version}) is listening on ${port}`);
+      } catch (e: any) {
         console.error('Fatal error during server start: ');
         console.error(e.stack || e);
 
@@ -247,6 +250,10 @@ export class ServerContainer {
     }
 
     return server;
+  }
+
+  protected createServer(config: CreateOptions, systemOptions?: SystemOptions): CubejsServer {
+    return new CubejsServer(config, systemOptions);
   }
 
   public async lookupConfiguration(override: boolean = false): Promise<CreateOptions> {
@@ -258,6 +265,25 @@ export class ServerContainer {
     const devMode = getEnv('devMode');
     if (devMode) {
       process.env.NODE_ENV = 'development';
+    }
+
+    if (fs.existsSync(path.join(process.cwd(), 'cube.py'))) {
+      const supported = isNativeSupported();
+      if (supported !== true) {
+        throw new Error(
+          `Native extension is required to load Python configuration. ${supported.reason}. Read more: ` +
+          'https://github.com/cube-js/cube/blob/master/packages/cubejs-backend-native/README.md#supported-architectures-and-platforms'
+        );
+      }
+
+      if (isFallbackBuild()) {
+        throw new Error(
+          'Unable to load Python configuration because you are using the fallback build of native extension. Read more: ' +
+          'https://github.com/cube-js/cube/blob/master/packages/cubejs-backend-native/README.md#supported-architectures-and-platforms'
+        );
+      }
+
+      return this.loadConfigurationFromPythonFile();
     }
 
     if (fs.existsSync(path.join(process.cwd(), 'cube.ts'))) {
@@ -284,9 +310,7 @@ export class ServerContainer {
 
     const exports: Record<string, any> = {};
 
-    const script = new vm.Script(content, {
-      displayErrors: true,
-    });
+    const script = new vm.Script(content);
     script.runInNewContext(
       {
         require,
@@ -296,6 +320,7 @@ export class ServerContainer {
       },
       {
         filename: 'cube.js',
+        displayErrors: true,
       }
     );
 
@@ -308,13 +333,34 @@ export class ServerContainer {
     );
   }
 
+  protected async loadConfigurationFromPythonFile(): Promise<CreateOptions> {
+    const content = await fsAsync.readFile(
+      path.join(process.cwd(), 'cube.py'),
+      'utf-8'
+    );
+
+    if (this.configuration.debug) {
+      console.log('Loaded python configuration file', content);
+    }
+
+    return this.loadConfigurationFromPythonMemory(content);
+  }
+
+  protected async loadConfigurationFromPythonMemory(content: string): Promise<CreateOptions> {
+    const config = await pythonLoadConfig(content, {
+      fileName: 'cube.py',
+    });
+
+    return config as any;
+  }
+
   protected async loadConfigurationFromFile(): Promise<CreateOptions> {
     const file = await import(
       path.join(process.cwd(), 'cube.js')
     );
 
     if (this.configuration.debug) {
-      console.log('Loaded configuration file', file);
+      console.log('Loaded js configuration file', file);
     }
 
     if (file.default) {
@@ -355,10 +401,10 @@ export class ServerContainer {
     let instance = await makeInstance(false);
 
     if (!embedded) {
-      let shutdownHandler: Promise<0|1>|null = null;
+      let shutdownHandler: Promise<0 | 1> | null = null;
       let killSignalCount = 0;
 
-      const signalToShutdown = [
+      const signalToShutdown: NodeJS.Signals[] = [
         // Signal Terminate - graceful shutdown in Unix systems
         'SIGTERM',
         // Ctrl+C
@@ -397,12 +443,13 @@ export class ServerContainer {
               process.exit(1);
             }
           } else {
+            console.log(`Received ${signal} signal, terminating with process exit`);
             process.exit(0);
           }
         });
       }
 
-      let restartHandler: Promise<0|1>|null = null;
+      let restartHandler: Promise<0 | 1> | null = null;
 
       process.addListener('SIGUSR1', async (signal) => {
         console.log(`Received ${signal} signal, reloading in ${instance.configuration.gracefulShutdown}s`);

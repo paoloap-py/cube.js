@@ -1,11 +1,11 @@
 import { PlusOutlined } from '@ant-design/icons';
 import { AvailableCube } from '@cubejs-client/react';
+import { useCallback } from 'react';
 
 import MemberDropdown from './MemberDropdown';
 import RemoveButtonGroup from './RemoveButtonGroup';
 import { SectionRow } from '../components';
 import MissingMemberTooltip from './MissingMemberTooltip';
-import { useCallback } from 'react';
 
 type MemberGroupProps = {
   disalbed?: boolean;
@@ -24,7 +24,7 @@ export default function MemberGroup({
   const handleClick = useCallback((m) => updateMethods.add(m), []);
 
   return (
-    <SectionRow>
+    <SectionRow className="cube-section">
       {members.map((m) => {
         const isMissing = missingMembers.includes(m.title);
 
@@ -38,7 +38,7 @@ export default function MemberGroup({
           >
             <MemberDropdown
               disabled={disabled}
-              availableMembers={availableMembers}
+              availableCubes={availableMembers}
               onClick={(updateWith) => updateMethods.update(m, updateWith)}
             >
               {m.title}
@@ -58,7 +58,7 @@ export default function MemberGroup({
       <MemberDropdown
         data-testid={addMemberName}
         disabled={disabled}
-        availableMembers={availableMembers}
+        availableCubes={availableMembers}
         type="dashed"
         icon={<PlusOutlined />}
         onClick={handleClick}

@@ -1,6 +1,5 @@
-import { fetch } from 'whatwg-fetch';
 import cookie from 'js-cookie';
-import uuidv4 from 'uuid/v4';
+import { v4 as uuidv4 } from 'uuid';
 
 let flushPromise = null;
 let trackEvents: BaseEvent[] = [];
@@ -60,7 +59,7 @@ export const trackImpl = async (event) => {
       if (result.status !== 200 && retries > 0) {
         return flush(toFlush, retries - 1);
       }
-    } catch (e) {
+    } catch (e: any) {
       if (retries > 0) {
         return flush(toFlush, retries - 1);
       }

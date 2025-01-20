@@ -4,7 +4,7 @@ import { QueryRenderer } from '@cubejs-client/react';
 import { format } from 'sql-formatter';
 
 import PrismCode from '../PrismCode';
-import { FatalError } from '../atoms';
+import { FatalError } from './Error/FatalError';
 
 const CachePane = ({ query }) => (
   <QueryRenderer
@@ -15,8 +15,9 @@ const CachePane = ({ query }) => (
         return <FatalError error={error} />;
       }
 
-      const { loadResponse } = resultSet?.serialize() || {};
+      const rs: any = resultSet?.serialize() || {};
       const rawQuery = sqlQuery?.rawQuery();
+      const loadResponse = rs.loadResponse?.results[0];
 
       return (
         <Tabs
@@ -51,7 +52,7 @@ const CachePane = ({ query }) => (
                         rawQuery &&
                         JSON.stringify(
                           loadResponse.refreshKeyValues[
-                            rawQuery.cacheKeyQueries.queries.indexOf(record)
+                            rawQuery.cacheKeyQueries.indexOf(record)
                           ],
                           null,
                           2
@@ -61,7 +62,7 @@ const CachePane = ({ query }) => (
                   ),
                 },
               ]}
-              dataSource={rawQuery?.cacheKeyQueries.queries}
+              dataSource={rawQuery?.cacheKeyQueries}
             />
           </Tabs.TabPane>
           <Tabs.TabPane tab="Pre-aggregations" key="preAggregations">
@@ -88,15 +89,20 @@ const CachePane = ({ query }) => (
                 {
                   title: 'Refresh Key Value',
                   key: 'value',
-                  render: (text, record) =>
-                    loadResponse?.usedPreAggregations?.[
+                  render: (text, record) => {
+                    let refreshKeyValues = loadResponse?.usedPreAggregations?.[
                       record.tableName
-                    ]?.refreshKeyValues.map((k) => (
+                      ]?.refreshKeyValues;
+                    if (Array.isArray(refreshKeyValues)) {
+                      refreshKeyValues = refreshKeyValues.reduce((a, b) => a.concat(b), []);
+                    }
+                    return refreshKeyValues?.map((k) => (
                       <PrismCode
                         key={JSON.stringify(k)}
                         code={JSON.stringify(k, null, 2)}
                       />
-                    )),
+                    ))
+                  }
                 },
               ]}
               dataSource={rawQuery?.preAggregations}

@@ -1,9 +1,19 @@
-import { Tabs } from 'antd';
-import { ReactNode, useEffect } from 'react';
-import { ChartType, Query } from '@cubejs-client/core';
+import {
+  ChartType,
+  PivotConfig,
+  Query,
+  validateQuery,
+} from '@cubejs-client/core';
+import { Input, Tabs } from 'antd';
+import equals from 'fast-deep-equal';
+import { ReactNode, useEffect, useState } from 'react';
 import styled from 'styled-components';
 
+import { event } from '../../events';
 import { useLocalStorage } from '../../hooks';
+import { QueryLoadResult } from '../ChartRenderer/ChartRenderer';
+import { DrilldownModal } from '../DrilldownModal/DrilldownModal';
+import { useChartRendererStateMethods } from './ChartRendererStateProvider';
 
 const { TabPane } = Tabs;
 
@@ -23,6 +33,7 @@ type QueryTab = {
   id: string;
   query: Query;
   chartType?: ChartType;
+  name?: string;
 };
 
 type QueryTabs = {
@@ -30,39 +41,183 @@ type QueryTabs = {
   tabs: QueryTab[];
 };
 
-type QueryTabsProps = {
-  query: Query;
+type DrillDownConfig = {
+  query?: Query | null;
+  pivotConfig?: PivotConfig | null;
+};
+
+export type QueryTabsProps = {
+  query: Query | null;
   children: (
     tab: QueryTab,
     saveTab: (tab: Omit<QueryTab, 'id'>) => void
   ) => ReactNode;
   sidebar?: ReactNode | null;
+  onTabChange?: (tab: QueryTab) => void;
 };
 
-export function QueryTabs({ query, children, sidebar = null }: QueryTabsProps) {
+export function QueryTabs({
+  query,
+  children,
+  sidebar = null,
+  onTabChange,
+}: QueryTabsProps) {
+  const {
+    setChartRendererReady,
+    setQueryStatus,
+    setQueryError,
+    setResultSetExists,
+    setQueryLoading,
+    setBuildInProgress,
+    setSlowQuery,
+    setSlowQueryFromCache,
+    setQueryRequestId,
+  } = useChartRendererStateMethods();
+
+  const [editableTabId, setEditableTabId] = useState<string>();
+  const [editableTabValue, setEditableTabValue] = useState<string>('');
+  const [ready, setReady] = useState<boolean>(false);
   const [queryTabs, saveTabs] = useLocalStorage<QueryTabs>('queryTabs', {
     activeId: '1',
     tabs: [
       {
         id: '1',
-        query,
+        query: query || {},
       },
     ],
   });
 
-  // tmp transition to new format
+  const [drilldownConfig, setDrilldownConfig] = useState<DrillDownConfig>({});
+
   useEffect(() => {
-    if (!queryTabs.activeId && (queryTabs as any).length > 0) {
+    window['__cubejsPlayground'] = {
+      ...window['__cubejsPlayground'],
+      forQuery(queryId: string) {
+        return {
+          onChartRendererReady() {
+            setChartRendererReady(queryId, true);
+          },
+          onQueryStart: () => {
+            setQueryLoading(queryId, true);
+          },
+          onQueryLoad: ({ resultSet, error }: QueryLoadResult) => {
+            let isAggregated;
+
+            if (resultSet) {
+              const { loadResponse } = resultSet.serialize();
+              const {
+                requestId,
+                external,
+                dbType,
+                extDbType,
+                usedPreAggregations = {},
+              } = loadResponse.results[0] || {};
+
+              if (requestId) {
+                setQueryRequestId(queryId, requestId);
+              }
+
+              setSlowQueryFromCache(queryId, Boolean(loadResponse.slowQuery));
+              Boolean(loadResponse.slowQuery) && setSlowQuery(queryId, false);
+              setResultSetExists(queryId, true);
+
+              isAggregated = Object.keys(usedPreAggregations).length > 0;
+
+              event(
+                isAggregated
+                  ? 'load_request_success_aggregated:frontend'
+                  : 'load_request_success:frontend',
+                {
+                  dbType,
+                  ...(isAggregated ? { external } : null),
+                  ...(external ? { extDbType } : null),
+                }
+              );
+
+              const response = resultSet.serialize();
+              const [result] = response.loadResponse.results;
+
+              const preAggregationType = Object.values(
+                result.usedPreAggregations || {}
+              )[0]?.type;
+              const transformedQuery = result.transformedQuery;
+
+              setQueryStatus(queryId, {
+                resultSet,
+                error,
+                isAggregated,
+                preAggregationType,
+                transformedQuery,
+                extDbType,
+                external,
+              });
+            }
+
+            if (error) {
+              setQueryStatus(queryId, null);
+              setQueryError(queryId, error);
+            }
+
+            if (resultSet || error) {
+              setQueryLoading(queryId, false);
+            }
+          },
+          onQueryProgress: (progress) => {
+            setBuildInProgress(
+              queryId,
+              Boolean(progress?.stage?.stage.includes('pre-aggregation'))
+            );
+
+            const isQuerySlow =
+              progress?.stage?.stage.includes('Executing query') &&
+              (progress.stage.timeElapsed || 0) >= 5000;
+
+            setSlowQuery(queryId, isQuerySlow);
+            isQuerySlow && setSlowQueryFromCache(queryId, false);
+          },
+          onQueryDrilldown: (query, pivotConfig) => {
+            setDrilldownConfig({
+              query,
+              pivotConfig,
+            });
+          },
+        };
+      },
+    };
+  }, []);
+
+  useEffect(() => {
+    if (ready) {
+      return;
+    }
+
+    const currentTab = queryTabs.tabs.find(
+      (tab) => tab.id === queryTabs.activeId
+    );
+
+    if (
+      query &&
+      !equals(validateQuery(currentTab?.query), validateQuery(query))
+    ) {
+      const id = getNextId();
+
       saveTabs({
-        activeId: queryTabs[0].id,
-        tabs: queryTabs as any,
+        activeId: id,
+        tabs: [...queryTabs.tabs, { id, query }],
       });
     }
-  }, [queryTabs]);
 
-  if (!queryTabs.activeId) {
-    return null;
-  }
+    setReady(true);
+  }, [ready]);
+
+  useEffect(() => {
+    if (ready && queryTabs.activeId) {
+      const activeTab = queryTabs.tabs.find(
+        (tab) => tab.id === queryTabs.activeId
+      );
+      activeTab && onTabChange?.(activeTab);
+    }
+  }, [ready, queryTabs.activeId]);
 
   const { activeId, tabs } = queryTabs;
 
@@ -91,9 +246,31 @@ export function QueryTabs({ query, children, sidebar = null }: QueryTabsProps) {
       }),
     });
   }
+  
+  function setTabName(tabId: string, name: string) {
+    saveTabs({
+      ...queryTabs,
+      tabs: tabs.map((currentTab) => {
+        return tabId === currentTab.id
+          ? {
+              ...currentTab,
+              name
+            }
+          : currentTab;
+      }),
+    });
+  }
 
   function setActiveId(activeId: string) {
     saveTabs({ activeId, tabs });
+  }
+
+  function handleDrilldownModalClose() {
+    setDrilldownConfig({});
+  }
+
+  if (!ready || !queryTabs.activeId) {
+    return null;
   }
 
   return (
@@ -140,10 +317,54 @@ export function QueryTabs({ query, children, sidebar = null }: QueryTabsProps) {
         <TabPane
           key={tab.id}
           data-testid={`query-tab-${tab.id}`}
-          tab={`Query ${tab.id}`}
           closable={tabs.length > 1}
+          tab={
+            editableTabId === tab.id ? (
+              <Input
+                autoFocus
+                size="small"
+                value={editableTabValue}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    setEditableTabId(undefined);
+                    
+                    if (editableTabValue.trim()) {
+                      setTabName(tab.id, editableTabValue.trim());
+                      setEditableTabValue('');
+                    }
+                  }
+                  e.stopPropagation();
+                }}
+                onChange={(e) => setEditableTabValue(e.target.value)}
+                onBlur={() => {
+                  if (editableTabValue.trim()) {
+                    setTabName(tab.id, editableTabValue.trim());
+                    setEditableTabValue('');
+                  }
+                  setEditableTabId(undefined);
+                }}
+              />
+            ) : (
+              <span
+                style={{ userSelect: 'none' }}
+                onDoubleClick={() => {
+                  setEditableTabValue(tab.name || `Query ${tab.id}`);
+                  setEditableTabId(tab.id);
+                }}
+              >
+                {tab.name ? tab.name : `Query ${tab.id}`}
+              </span>
+            )
+          }
         >
           {children(tab, handleTabSave)}
+          {drilldownConfig.query ? (
+            <DrilldownModal
+              query={drilldownConfig.query}
+              pivotConfig={drilldownConfig.pivotConfig}
+              onClose={handleDrilldownModalClose}
+            />
+          ) : null}
         </TabPane>
       ))}
     </StyledTabs>

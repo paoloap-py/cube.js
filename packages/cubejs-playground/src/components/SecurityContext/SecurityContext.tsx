@@ -11,11 +11,11 @@ const { TabPane } = Tabs;
 const { TextArea } = Input;
 const { Text, Link } = Typography;
 
-type TFlexBoxProps = {
+type FlexBoxProps = {
   editing: boolean;
 };
 
-const FlexBox = styled.div<TFlexBoxProps>`
+const FlexBox = styled.div<FlexBoxProps>`
   display: flex;
   gap: 8px;
 
@@ -59,9 +59,14 @@ export function SecurityContext() {
   async function handleTokenSave(values) {
     try {
       setSubmitting(true);
-      saveToken(await onTokenPayloadChange(jwtDecode(values?.token)));
+      await saveToken(
+        await onTokenPayloadChange(
+          jwtDecode(values?.token),
+          values?.token || null
+        )
+      );
     } catch (_) {
-      saveToken(values?.token || null);
+      await saveToken(values?.token || null);
     } finally {
       setEditingToken(false);
       setIsModalOpen(false);
@@ -76,7 +81,7 @@ export function SecurityContext() {
     try {
       JSON.parse(value);
       setIsJsonValid(true);
-    } catch (error) {
+    } catch (error: any) {
       setIsJsonValid(false);
     }
   }
@@ -92,14 +97,16 @@ export function SecurityContext() {
       setSubmitting(true);
 
       try {
-        saveToken(await onTokenPayloadChange(JSON.parse(tmpPayload || '{}')));
-      } catch (error) {
+        await saveToken(
+          await onTokenPayloadChange(JSON.parse(tmpPayload || '{}'), null)
+        );
+      } catch (error: any) {
         console.error(error);
       }
 
       setSubmitting(false);
     } else if (!tmpPayload) {
-      saveToken(null);
+      await saveToken(null);
     }
 
     setIsModalOpen(false);
@@ -111,7 +118,7 @@ export function SecurityContext() {
       visible={isModalOpen}
       footer={null}
       bodyStyle={{
-        paddingTop: 16,
+        paddingTop: 8,
       }}
       onCancel={() => {
         setIsModalOpen(false);

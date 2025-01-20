@@ -1,56 +1,93 @@
 import { Injectable, Inject } from '@angular/core';
-import { Observable, from } from 'rxjs';
-import cubejs, {
+import { Observable, from, BehaviorSubject } from 'rxjs';
+import cube, {
+  CubeApi,
+  CubeApiOptions,
+  DryRunResponse,
   LoadMethodOptions,
   Meta,
   Query,
   ResultSet,
+  SqlQuery,
 } from '@cubejs-client/core';
 
-@Injectable()
-export class CubejsClient {
-  private cubeJsApi;
-  constructor(@Inject('config') private config) {}
+export type CubeConfig = {
+  token: string;
+  options?: CubeApiOptions;
+};
 
-  private apiInstace() {
-    if (!this.cubeJsApi) {
+@Injectable()
+export class CubeClient {
+  public ready$: BehaviorSubject<boolean> = new BehaviorSubject(false);
+
+  private cubeApi: CubeApi;
+
+  constructor(@Inject('config') private config: any | Observable<any>) {
+    if (this.config instanceof Observable) {
+      this.config.subscribe(() => {
+        this.ready$.next(true);
+      });
+    } else {
+      this.ready$.next(true);
+    }
+  }
+
+  private apiInstance(): CubeApi {
+    if (!this.cubeApi) {
       if (this.config instanceof Observable) {
         this.config.subscribe((config) => {
-          this.cubeJsApi = cubejs(config.token, config.options);
+          this.cubeApi = cube(config.token, config.options);
+
+          if (!this.cubeApi) {
+            throw new Error(
+              'Cannot create CubeApi instance. Please check that the config is passed correctly and contains all required options.'
+            );
+          }
         });
       } else {
-        this.cubeJsApi = cubejs(this.config.token, this.config.options);
+        this.cubeApi = cube(this.config.token, this.config.options);
       }
     }
 
-    return this.cubeJsApi;
+    return this.cubeApi;
   }
 
   public load(
     query: Query | Query[],
     options?: LoadMethodOptions
   ): Observable<ResultSet> {
-    return from(<Promise<ResultSet>>this.apiInstace().load(query, options));
+    return from(<Promise<ResultSet>>this.apiInstance().load(query, options));
   }
 
-  public sql(...params): Observable<any> {
-    return from(this.apiInstace().sql(...params));
+  public sql(
+    query: Query | Query[],
+    options?: LoadMethodOptions
+  ): Observable<SqlQuery> {
+    return from(this.apiInstance().sql(query, options));
   }
 
-  public dryRun(...params): Observable<any> {
-    return from(this.apiInstace().dryRun(...params));
+  public dryRun(
+    query: Query | Query[],
+    options?: LoadMethodOptions
+  ): Observable<DryRunResponse> {
+    return from(this.apiInstance().dryRun(query, options));
   }
 
-  public meta(...params): Observable<Meta> {
-    return from(<Promise<Meta>>this.apiInstace().meta(...params));
+  public meta(options?: LoadMethodOptions): Observable<Meta> {
+    return from(this.apiInstance().meta(options));
   }
 
   public watch(query, params = {}): Observable<ResultSet> {
     return new Observable((observer) =>
       query.subscribe({
         next: async (query) => {
-          const resultSet = await this.apiInstace().load(query, params);
-          observer.next(resultSet);
+          try {
+            const resultSet = await this.apiInstance().load(query, params);
+            observer.next(resultSet);
+          } catch(err) {
+            observer.error(err);
+          }
+
         },
       })
     );

@@ -1,35 +1,25 @@
 /* eslint-disable no-undef,react/jsx-no-target-blank */
-import { Component, useEffect } from 'react';
 import '@ant-design/compatible/assets/index.css';
-import { Layout, Alert } from 'antd';
-import { fetch } from 'whatwg-fetch';
-import { RouteComponentProps, withRouter } from 'react-router';
+import { Alert, Layout } from 'antd';
+import { Component, PropsWithChildren, useEffect } from 'react';
+import { RouteComponentProps, withRouter } from 'react-router-dom';
 import styled from 'styled-components';
+import { Root } from '@cube-dev/ui-kit';
 
-import Header from './components/Header';
-import GlobalStyles from './components/GlobalStyles';
 import { CubeLoader } from './atoms';
+import { AppContextConsumer, PlaygroundContext } from './components/AppContext';
+import GlobalStyles from './components/GlobalStyles';
+import Header from './components/Header/Header';
+import { LivePreviewContextProvider } from './components/LivePreviewContext/LivePreviewContextProvider';
 import {
   event,
   setAnonymousId,
-  setTracker,
   setTelemetry,
+  setTracker,
   trackImpl,
 } from './events';
-import {
-  AppContextConsumer,
-  PlaygroundContext,
-  useAppContext,
-} from './components/AppContext';
-import './index.less';
-
-const selectedTab = (pathname) => {
-  if (pathname === '/template-gallery') {
-    return ['/dashboard'];
-  } else {
-    return [pathname];
-  }
-};
+import { useAppContext } from './hooks';
+import { QUERY_BUILDER_COLOR_TOKENS } from './QueryBuilderV2';
 
 const StyledLayoutContent = styled(Layout.Content)`
   height: 100%;
@@ -42,7 +32,14 @@ type AppState = {
   isAppContextSet: boolean;
 };
 
-class App extends Component<RouteComponentProps, AppState> {
+const ROOT_STYLES = {
+  height: 'min 100vh',
+  display: 'grid',
+  gridTemplateRows: 'min-content 1fr',
+  ...QUERY_BUILDER_COLOR_TOKENS,
+};
+
+class App extends Component<PropsWithChildren<RouteComponentProps>, AppState> {
   static getDerivedStateFromError(error) {
     return { fatalError: error };
   }
@@ -55,8 +52,6 @@ class App extends Component<RouteComponentProps, AppState> {
   };
 
   async componentDidMount() {
-    const { history } = this.props;
-
     setTimeout(() => this.setState({ showLoader: true }), 700);
 
     window.addEventListener('unhandledrejection', (promiseRejectionEvent) => {
@@ -80,11 +75,7 @@ class App extends Component<RouteComponentProps, AppState> {
       dockerVersion: context.dockerVersion,
     });
 
-    this.setState({ context }, () => {
-      if (context.shouldStartConnectionWizardFlow) {
-        history.push('/connection');
-      }
-    });
+    this.setState({ context });
   }
 
   componentDidCatch(error, info) {
@@ -101,8 +92,6 @@ class App extends Component<RouteComponentProps, AppState> {
     if (context != null && !isAppContextSet) {
       return (
         <>
-          {showLoader ? <CubeLoader /> : null}
-
           <ContextSetter context={context} />
           <AppContextConsumer
             onReady={() => this.setState({ isAppContextSet: true })}
@@ -111,28 +100,36 @@ class App extends Component<RouteComponentProps, AppState> {
       );
     }
 
+    if (context == null && !isAppContextSet) {
+      return showLoader ? <CubeLoader /> : null;
+    }
+
     if (fatalError) {
       console.log(fatalError.stack);
     }
 
     return (
-      <Layout>
-        <GlobalStyles />
+      <LivePreviewContextProvider
+        disabled={context!.livePreview == null || !context!.livePreview}
+      >
+        <Root styles={ROOT_STYLES}>
+          <GlobalStyles />
 
-        <Header selectedKeys={selectedTab(location.pathname)} />
+          <Header selectedKeys={[location.pathname]} />
 
-        <StyledLayoutContent>
-          {fatalError ? (
-            <Alert
-              message="Error occured while rendering"
-              description={fatalError.stack || ''}
-              type="error"
-            />
-          ) : (
-            children
-          )}
-        </StyledLayoutContent>
-      </Layout>
+          <StyledLayoutContent>
+            {fatalError ? (
+              <Alert
+                message="Error occured while rendering"
+                description={fatalError.stack || ''}
+                type="error"
+              />
+            ) : (
+              children
+            )}
+          </StyledLayoutContent>
+        </Root>
+      </LivePreviewContextProvider>
     );
   }
 }
@@ -147,7 +144,11 @@ function ContextSetter({ context }: ContextSetterProps) {
   useEffect(() => {
     if (context !== null) {
       setContext({
-        playgroundContext: context,
+        ready: true,
+        playgroundContext: {
+          ...context,
+          isCloud: false,
+        },
         identifier: context.identifier,
       });
     }

@@ -1,16 +1,17 @@
 import { Alert, Col, Row, Space, Spin, Typography } from 'antd';
 import { useEffect, useLayoutEffect, useState } from 'react';
 import styled from 'styled-components';
+import { usePlaygroundContext } from '../../hooks';
 
 import envVarsDatabaseMap from '../../shared/env-vars-db-map';
 import { fetchPoll, fetchWithTimeout } from '../../utils';
 import ConnectionTest from './components/ConnectionTest';
 import { DatabaseCard, SelectedDatabaseCard } from './components/DatabaseCard';
 import DatabaseForm from './components/DatabaseForm';
-import { Button, FatalError } from '../../atoms';
+import { Button } from '../../atoms';
+import { FatalError } from '../../components/Error/FatalError';
 import { LocalhostTipBox } from './components/LocalhostTipBox';
 import { event, playgroundAction } from '../../events';
-import { useAppContext } from '../../components/AppContext';
 
 const { Title, Paragraph } = Typography;
 
@@ -81,7 +82,7 @@ export type Database = {
 };
 
 export function ConnectionWizardPage({ history }) {
-  const { playgroundContext } = useAppContext();
+  const playgroundContext = usePlaygroundContext();
 
   const [hostname, setHostname] = useState<string>('');
   const [isLoading, setLoading] = useState(false);
@@ -244,24 +245,32 @@ export function ConnectionWizardPage({ history }) {
               ) : (
                 <Typography.Paragraph>
                   Enter database credentials to connect to your database. <br />
-                  Cube.js will store your credentials into the <code>
+                  Cube will store your credentials into the <code>
                     .env
                   </code>{' '}
                   file for future use.
                 </Typography.Paragraph>
               )}
 
-              <Typography.Paragraph>
-                For advanced configuration, use the <code>cube.js</code>{' '}
-                configuration file inside mount volume or environment variables.
-                <br />
-                <Typography.Link
-                  href="https://cube.dev/docs/connecting-to-the-database"
-                  target="_blank"
-                >
-                  Learn more about connecting to databases in the documentation.
-                </Typography.Link>
-              </Typography.Paragraph>
+              <Alert
+                type="info"
+                message={
+                  <>
+                    For advanced configuration, use the <b>cube.js</b> or{' '}
+                    <b>.env</b> configuration files in your Cube project.
+                    Note these files are on the mount volume if you are running
+                    Docker.
+                    <br />
+                    <Typography.Link
+                      href="https://cube.dev/docs/config/databases"
+                      target="_blank"
+                    >
+                      Learn more about connecting to databases in the
+                      documentation.
+                    </Typography.Link>
+                  </>
+                }
+              />
 
               {db.title === 'MongoDB' ? (
                 <Alert
@@ -304,7 +313,7 @@ export function ConnectionWizardPage({ history }) {
                         });
 
                         history.push('/schema');
-                      } catch (error) {
+                      } catch (error: any) {
                         setTestConnectionResult({
                           success: false,
                           error,
@@ -327,7 +336,7 @@ export function ConnectionWizardPage({ history }) {
                 </Space>
               </Col>
 
-              {['MySQL', 'PostgreSQL', 'Druid', 'ClickHouse'].includes(
+              {['MySQL', 'PostgreSQL', 'Druid', 'ClickHouse', 'Crate'].includes(
                 db?.title || ''
               ) && playgroundContext?.isDocker ? (
                 <Col span={12}>

@@ -3,37 +3,61 @@ import R from 'ramda';
 import camelCase from 'camelcase';
 
 import { UserError } from './UserError';
-import { BaseMeasure } from '../adapter';
+import { BaseMeasure, BaseQuery } from '../adapter';
 
 export class CubeToMetaTransformer {
+  /**
+   * @param {import('./CubeValidator').CubeValidator} cubeValidator
+   * @param {import('./CubeEvaluator').CubeEvaluator} cubeEvaluator
+   * @param {import('./ContextEvaluator').ContextEvaluator} contextEvaluator
+   * @param {import('./JoinGraph').JoinGraph} joinGraph
+   */
   constructor(cubeValidator, cubeEvaluator, contextEvaluator, joinGraph) {
     this.cubeValidator = cubeValidator;
     this.cubeSymbols = cubeEvaluator;
     this.cubeEvaluator = cubeEvaluator;
     this.contextEvaluator = contextEvaluator;
     this.joinGraph = joinGraph;
+    this.cubes = [];
   }
 
   compile(cubes, errorReporter) {
-    // eslint-disable-next-line no-multi-assign
-    this.cubes = this.queries = this.cubeSymbols.cubeList
+    this.cubes = this.cubeSymbols.cubeList
       .filter(this.cubeValidator.isCubeValid.bind(this.cubeValidator))
       .map((v) => this.transform(v, errorReporter.inContext(`${v.name} cube`)))
-      .filter(c => !!c);
+      .filter(Boolean);
+
+    /**
+     * @deprecated
+     * @protected
+     */
+    this.queries = this.cubes;
   }
 
-  // eslint-disable-next-line no-unused-vars
-  transform(cube, errorReporter) {
+  /**
+   * @protected
+   */
+  transform(cube) {
     const cubeTitle = cube.title || this.titleize(cube.name);
+
+    const isCubeVisible = this.isVisible(cube, true);
+
     return {
       config: {
         name: cube.name,
+        type: cube.isView ? 'view' : 'cube',
         title: cubeTitle,
+        isVisible: isCubeVisible,
+        public: isCubeVisible,
         description: cube.description,
         connectedComponent: this.joinGraph.connectedComponents()[cube.name],
+        meta: cube.meta,
         measures: R.compose(
-          R.map((nameToMetric) => this.measureConfig(cube.name, cubeTitle, nameToMetric)),
-          R.filter((nameToMetric) => this.isVisible(nameToMetric[1], true)),
+          R.map((nameToMetric) => ({
+            ...this.measureConfig(cube.name, cubeTitle, nameToMetric),
+            isVisible: isCubeVisible ? this.isVisible(nameToMetric[1], true) : false,
+            public: isCubeVisible ? this.isVisible(nameToMetric[1], true) : false,
+          })),
           R.toPairs
         )(cube.measures || {}),
         dimensions: R.compose(
@@ -44,13 +68,30 @@ export class CubeToMetaTransformer {
             description: nameToDimension[1].description,
             shortTitle: this.title(cubeTitle, nameToDimension, true),
             suggestFilterValues:
-              nameToDimension[1].suggestFilterValues == null ? true : nameToDimension[1].suggestFilterValues,
+              nameToDimension[1].suggestFilterValues == null
+                ? true
+                : nameToDimension[1].suggestFilterValues,
             format: nameToDimension[1].format,
             meta: nameToDimension[1].meta,
+            isVisible: isCubeVisible
+              ? this.isVisible(nameToDimension[1], !nameToDimension[1].primaryKey)
+              : false,
+            public: isCubeVisible
+              ? this.isVisible(nameToDimension[1], !nameToDimension[1].primaryKey)
+              : false,
+            primaryKey: !!nameToDimension[1].primaryKey,
+            aliasMember: nameToDimension[1].aliasMember,
+            granularities:
+              nameToDimension[1].granularities
+                ? R.compose(R.map((g) => ({
+                  name: g[0],
+                  title: this.title(cubeTitle, g, true),
+                  interval: g[1].interval,
+                  offset: g[1].offset,
+                  origin: g[1].origin,
+                })), R.toPairs)(nameToDimension[1].granularities)
+                : undefined,
           })),
-          R.filter(
-            nameToDimension => this.isVisible(nameToDimension[1], !nameToDimension[1].primaryKey)
-          ),
           R.toPairs
         )(cube.dimensions || {}),
         segments: R.compose(
@@ -60,10 +101,21 @@ export class CubeToMetaTransformer {
             shortTitle: this.title(cubeTitle, nameToSegment, true),
             description: nameToSegment[1].description,
             meta: nameToSegment[1].meta,
+            isVisible: isCubeVisible ? this.isVisible(nameToSegment[1], true) : false,
+            public: isCubeVisible ? this.isVisible(nameToSegment[1], true) : false,
           })),
           R.toPairs
-        )(cube.segments || {})
-      }
+        )(cube.segments || {}),
+        hierarchies: (cube.evaluatedHierarchies || []).map((it) => ({
+          ...it,
+          public: it.public ?? true,
+          name: `${cube.name}.${it.name}`,
+        })),
+        folders: (cube.folders || []).map((it) => ({
+          name: it.name,
+          members: it.includes.map(member => `${cube.name}.${member.name}`),
+        })),
+      },
     };
   }
 
@@ -86,13 +138,24 @@ export class CubeToMetaTransformer {
     )(this.queries);
   }
 
+  /**
+   * @protected
+   */
   isVisible(symbol, defaultValue) {
+    if (symbol.public != null) {
+      return symbol.public;
+    }
+
+    // TODO: Deprecated, should be removed in the future
     if (symbol.visible != null) {
       return symbol.visible;
     }
+
+    // TODO: Deprecated, should be removed in the futur
     if (symbol.shown != null) {
       return symbol.shown;
     }
+
     return defaultValue;
   }
 
@@ -105,6 +168,8 @@ export class CubeToMetaTransformer {
       cubeName, drillMembers, { originalSorting: true }
     )) || [];
 
+    const type = BaseQuery.toMemberDataType(nameToMetric[1].type);
+
     return {
       name,
       title: this.title(cubeTitle, nameToMetric),
@@ -113,8 +178,8 @@ export class CubeToMetaTransformer {
       format: nameToMetric[1].format,
       cumulativeTotal: nameToMetric[1].cumulative || BaseMeasure.isCumulative(nameToMetric[1]),
       cumulative: nameToMetric[1].cumulative || BaseMeasure.isCumulative(nameToMetric[1]),
-      type: 'number', // TODO
-      aggType: nameToMetric[1].type,
+      type,
+      aggType: nameToMetric[1].aggType || nameToMetric[1].type,
       drillMembers: drillMembersArray,
       drillMembersGrouped: {
         measures: drillMembersArray.filter((member) => this.cubeEvaluator.isMeasure(member)),

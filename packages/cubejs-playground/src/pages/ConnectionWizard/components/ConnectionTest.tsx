@@ -49,7 +49,7 @@ export default function ConnectionTest({
           description={(() => (
             <>
               <p style={{ paddingLeft: 20 }}>
-                Cube.js was unable to connect to the specified database.
+                Cube was unable to connect to the specified database.
               </p>
               <p style={{ paddingLeft: 20 }}>
                 The database returned the following error:
@@ -64,10 +64,10 @@ export default function ConnectionTest({
               </p>
               {/* eslint-disable-next-line */}
               <a
-                href="https://cube.dev/docs/connecting-to-the-database"
+                href="https://cube.dev/docs/config/databases"
                 target="_blank"
               >
-                https://cube.dev/docs/connecting-to-the-database
+                https://cube.dev/docs/config/databases
               </a>
             </>
           ))()}

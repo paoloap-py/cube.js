@@ -3,7 +3,25 @@ import crypto from 'crypto';
 
 import { Optional } from './type-helpers';
 
-type CancelablePromiseCancel = (waitExecution?: boolean) => Promise<any>;
+export type PromiseLock = {
+  promise: Promise<void>,
+  resolve: () => void,
+};
+
+export function createPromiseLock(): PromiseLock {
+  let resolve: any = null;
+
+  return {
+    promise: new Promise<void>((resolver) => {
+      resolve = resolver;
+    }),
+    resolve: () => {
+      resolve();
+    }
+  };
+}
+
+export type CancelablePromiseCancel = (waitExecution?: boolean) => Promise<any>;
 
 export interface CancelablePromise<T> extends Promise<T> {
   cancel: CancelablePromiseCancel;
@@ -31,7 +49,7 @@ export function pausePromise(ms: number): CancelablePromise<void> {
 }
 
 class CancelToken {
-  protected readonly deferred: (() => Promise<void>|void)[] = [];
+  protected readonly deferred: (() => Promise<void> | void)[] = [];
 
   protected readonly withQueue: CancelablePromiseCancel[] = [];
 
@@ -55,7 +73,7 @@ class CancelToken {
     }
   }
 
-  public defer(fn: () => Promise<void>|void): void {
+  public defer(fn: () => Promise<void> | void): void {
     this.deferred.push(fn);
   }
 
@@ -110,12 +128,12 @@ export function createCancelableInterval<T>(
   fn: (token: CancelToken) => Promise<T>,
   options: CancelableIntervalOptions,
 ): CancelableInterval {
-  let execution: CancelablePromise<T>|null = null;
-  let startTime: number|null = null;
+  let execution: CancelablePromise<T> | null = null;
+  let startTime: number | null = null;
   let intervalId: number = 0;
   let duplicatedExecutionTracked: boolean = false;
 
-  const timeout = setInterval(
+  const timerId = setInterval(
     async () => {
       if (execution) {
         if (options.onDuplicatedExecution) {
@@ -152,7 +170,7 @@ export function createCancelableInterval<T>(
 
   return {
     cancel: async (waitExecution: boolean = true) => {
-      clearInterval(timeout);
+      clearInterval(timerId);
 
       if (execution) {
         await execution.cancel(waitExecution);
@@ -195,7 +213,7 @@ export const withTimeoutRace = <T>(
   fn: CancelablePromise<T>,
   timeout: number,
 ): Promise<T> => {
-  let timer: NodeJS.Timeout|null = null;
+  let timer: NodeJS.Timeout | null = null;
 
   return Promise.race<any>([
     fn,
@@ -227,7 +245,7 @@ export const retryWithTimeout = <T>(
   fn: (token: CancelToken) => Promise<T>,
   { timeout, intervalPause }: RetryWithTimeoutOptions,
 ) => withTimeoutRace(
-    createCancelablePromise<T|null>(async (token) => {
+    createCancelablePromise<T | null>(async (token) => {
       let i = 0;
 
       while (!token.isCanceled()) {
@@ -362,7 +380,7 @@ export const asyncMemoizeBackground = <Ret, Arguments>(
 
       bucket.item = item;
       bucket.lifetime = Date.now() + options.extractCacheLifetime(item);
-    } catch (e) {
+    } catch (e: any) {
       options.onBackgroundException(e);
     }
   };

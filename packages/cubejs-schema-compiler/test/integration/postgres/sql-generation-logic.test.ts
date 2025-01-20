@@ -11,15 +11,15 @@ describe('SQL Generation', () => {
       type: 'number',
       sql: new Function('visitor_revenue', 'visitor_count', 'return visitor_revenue + "/" + visitor_count')
     }
-  
+
     cube(\`visitors\`, {
       sql: \`
-      select * from visitors WHERE \${USER_CONTEXT.source.filter('source')} AND
-      \${USER_CONTEXT.sourceArray.filter(sourceArray => \`source in (\${sourceArray.join(',')})\`)}
+      select * from visitors WHERE \${SECURITY_CONTEXT.source.filter('source')} AND
+      \${SECURITY_CONTEXT.sourceArray.filter(sourceArray => \`source in (\${sourceArray.join(',')})\`)}
       \`,
-      
+
       rewriteQueries: true,
-      
+
       refreshKey: {
         sql: 'SELECT 1',
       },
@@ -109,31 +109,31 @@ describe('SQL Generation', () => {
           type: 'time',
           sql: 'created_at'
         },
-        
+
         createdAtSqlUtils: {
           type: 'time',
           sql: SQL_UTILS.convertTz('created_at')
         },
-        
+
         checkins: {
           sql: \`\${visitor_checkins.visitor_checkins_count}\`,
           type: \`number\`,
           subQuery: true
         },
-        
+
         checkinsWithPropagation: {
           sql: \`\${visitor_checkins.visitor_checkins_count}\`,
           type: \`number\`,
           subQuery: true,
           propagateFiltersToSubQuery: true
         },
-        
+
         subQueryFail: {
           sql: '2',
           type: \`number\`,
           subQuery: true
         },
-        
+
         doubledCheckings: {
           sql: \`\${checkins} * 2\`,
           type: 'number'
@@ -160,7 +160,7 @@ describe('SQL Generation', () => {
       sql: \`
       select * from visitor_checkins WHERE \${FILTER_PARAMS.visitor_checkins.created_at.filter('created_at')}
       \`,
-      
+
       rewriteQueries: true,
 
       joins: {
@@ -215,7 +215,7 @@ describe('SQL Generation', () => {
           subQuery: true
         },
       },
-      
+
       preAggregations: {
         checkinSource: {
           type: 'rollup',
@@ -260,19 +260,19 @@ describe('SQL Generation', () => {
         }
       }
     })
-    
+
     cube('ReferenceVisitors', {
       sql: \`
-        select * from \${visitors.sql()} as t 
+        select * from \${visitors.sql()} as t
         WHERE \${FILTER_PARAMS.ReferenceVisitors.createdAt.filter(\`(t.created_at + interval '28 day')\`)} AND
         \${FILTER_PARAMS.ReferenceVisitors.createdAt.filter((from, to) => \`(t.created_at + interval '28 day') >= \${from} AND (t.created_at + interval '28 day') <= \${to}\`)}
       \`,
-      
+
       measures: {
         count: {
           type: 'count'
         },
-        
+
         googleSourcedCount: {
           type: 'count',
           filters: [{
@@ -280,7 +280,7 @@ describe('SQL Generation', () => {
           }]
         },
       },
-      
+
       dimensions: {
         createdAt: {
           type: 'time',
@@ -288,14 +288,14 @@ describe('SQL Generation', () => {
         }
       }
     })
-    
+
     cube('CubeWithVeryVeryVeryVeryVeryVeryVeryVeryVeryVeryVeryVeryVeryVeryVeryVeryVeryVeryVeryVeryVeryVeryVeryLongName', {
       sql: \`
       select * from cards
       \`,
-      
+
       sqlAlias: 'cube_with_long_name',
-      
+
       dataSource: 'oracle',
 
       measures: {
@@ -304,7 +304,83 @@ describe('SQL Generation', () => {
         }
       }
     });
-    `);
+  `);
+
+  const aliasedCubesCompilers = /** @type Compilers */ prepareCompiler(`
+    cube('LeftLongLongLongLongLongLongLongLongLongLongNameCube', {
+      sql: 'SELECT * FROM LEFT_TABLE',
+      sqlAlias: 'left',
+      measures: {
+        total_sum: {
+          format: 'currency',
+          sql: 'total',
+          type: 'sum'
+        },
+      },
+      dimensions: {
+        id: {
+          format: 'id',
+          primaryKey: true,
+          shown: true,
+          sql: 'id',
+          type: 'number'
+        },
+        description: {
+          sql: 'description',
+          type: 'string'
+        },
+      }
+    });
+
+    cube('RightLongLongLongLongLongLongLongLongLongLongNameCube', {
+      sql: 'SELECT * FROM RIGHT_TABLE',
+      sqlAlias: 'right',
+      measures: {
+        total_sum: {
+          format: 'currency',
+          sql: 'total',
+          type: 'sum'
+        },
+      },
+      dimensions: {
+        id: {
+          format: 'id',
+          primaryKey: true,
+          shown: true,
+          sql: 'id',
+          type: 'number'
+        },
+        description: {
+          sql: 'description',
+          type: 'string'
+        },
+      }
+    })
+
+    cube('MidLongLongLongLongLongLongLongLongLongLongNameCube', {
+      sql: 'SELECT * FROM MID_TABLE',
+      sqlAlias: 'mid',
+      joins: {
+        LeftLongLongLongLongLongLongLongLongLongLongNameCube: {
+          relationship: 'hasMany',
+          sql: \`\${MidLongLongLongLongLongLongLongLongLongLongNameCube}.left_id = \${LeftLongLongLongLongLongLongLongLongLongLongNameCube}.id\`,
+        },
+        RightLongLongLongLongLongLongLongLongLongLongNameCube: {
+          relationship: 'hasMany',
+          sql: \`\${MidLongLongLongLongLongLongLongLongLongLongNameCube}.right_id = \${RightLongLongLongLongLongLongLongLongLongLongNameCube}.id\`,
+        },
+      },
+      dimensions: {
+        id: {
+          format: 'id',
+          primaryKey: true,
+          shown: true,
+          sql: 'id',
+          type: 'number'
+        },
+      }
+    })
+  `);
 
   it('filter with operator OR', async () => {
     await compiler.compile();
@@ -324,8 +400,6 @@ describe('SQL Generation', () => {
       ],
       timezone: 'America/Los_Angeles'
     });
-
-    console.log(query.buildSqlAndParams());
 
     return dbRunner.testQuery(query.buildSqlAndParams()).then(res => {
       console.log(JSON.stringify(res));
@@ -379,7 +453,7 @@ describe('SQL Generation', () => {
     }
   });
 
-  it('having filter with operator OR', async () => {
+  it('having filter with operator OR 1', async () => {
     await compiler.compile();
 
     const query = new PostgresQuery({ joinGraph, cubeEvaluator, compiler }, {
@@ -574,7 +648,7 @@ describe('SQL Generation', () => {
     });
   });
 
-  it('where filter with operators OR & AND', async () => {
+  it('where filter with operators OR & AND 1', async () => {
     await compiler.compile();
 
     const query = new PostgresQuery({ joinGraph, cubeEvaluator, compiler }, {
@@ -916,6 +990,26 @@ describe('SQL Generation', () => {
     } catch (error) {
       expect(error).toBeInstanceOf(UserError);
     }
+  });
+
+  it('long named aliased cubes doesn\'t throws', async () => {
+    await aliasedCubesCompilers.compiler.compile();
+    const aliasedQuery = new PostgresQuery(aliasedCubesCompilers, {
+      dimensions: [
+        'MidLongLongLongLongLongLongLongLongLongLongNameCube.id',
+        'LeftLongLongLongLongLongLongLongLongLongLongNameCube.description',
+      ],
+      measures: [
+        'RightLongLongLongLongLongLongLongLongLongLongNameCube.total_sum',
+      ],
+      order: [
+        ['MidLongLongLongLongLongLongLongLongLongLongNameCube.id', 'asc'],
+      ],
+    });
+
+    return dbRunner.testQuery(aliasedQuery.buildSqlAndParams()).then(res => {
+      expect(res.length).toEqual(6);
+    });
   });
 
   // end of tests

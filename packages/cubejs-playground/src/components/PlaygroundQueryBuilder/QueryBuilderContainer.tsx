@@ -1,61 +1,76 @@
-import { useLayoutEffect, useMemo } from 'react';
-import { Card, Space } from 'antd';
-import styled from 'styled-components';
-import { CloudOutlined, LockOutlined } from '@ant-design/icons';
-import { useHistory } from 'react-router';
+import { LockIcon, ThunderboltIcon, Space, Button } from '@cube-dev/ui-kit';
 import { CubeProvider } from '@cubejs-client/react';
+import { Card } from 'antd';
+import { useLayoutEffect } from 'react';
+import { useHistory } from 'react-router-dom';
+import styled from 'styled-components';
 
-import { Button } from '../../atoms';
-import LivePreviewBar from '../LivePreviewContext/LivePreviewBar';
+import { CubeLoader } from '../../atoms';
+import { useCloud } from '../../cloud';
+import { useAppContext, useCubejsApi, useSecurityContext } from '../../hooks';
+import { Panel } from '../../QueryBuilderV2/components/Panel';
 import {
-  useCubejsApi,
-  useLivePreviewContext,
-  useSecurityContext,
-} from '../../hooks';
-import DashboardSource from '../../DashboardSource';
+  RollupDesignerContext,
+  useRollupDesignerContext,
+} from '../../rollup-designer';
+import { ChartRendererStateProvider } from '../QueryTabs/ChartRendererStateProvider';
+import { QueryTabs, QueryTabsProps } from '../QueryTabs/QueryTabs';
 import {
-  PlaygroundQueryBuilder,
-  PlaygroundQueryBuilderProps,
-} from './components/PlaygroundQueryBuilder';
-import { QueryTabs } from '../QueryTabs/QueryTabs';
+  QueryBuilder,
+  QueryBuilderProps,
+  RequestStatusProps,
+} from '../../QueryBuilderV2/index';
+import Vizard from '../Vizard/Vizard';
 
-const StyledCard: typeof Card = styled(Card)`
+import { PreAggregationStatus } from './components/index';
+
+const StyledCard = styled(Card)`
   border-radius: 0;
   border-bottom: 1px;
   min-height: 100%;
+  background: var(--layout-body-background);
 
   & .ant-card-body {
     padding: 0;
   }
 `;
 
-type QueryBuilderContainerProps = {
-  apiUrl?: string;
-  token?: string;
-} & Pick<
-  PlaygroundQueryBuilderProps,
+function RequestStatusComponent({
+  isAggregated,
+  external,
+  extDbType,
+  preAggregationType,
+}: RequestStatusProps) {
+  return (
+    <Space direction="vertical" gap="0" placeItems="end" margin="-1x 0">
+      <PreAggregationStatus
+        preAggregationType={preAggregationType}
+        isAggregated={isAggregated}
+        external={external}
+        extDbType={extDbType}
+      />
+    </Space>
+  );
+}
+
+type QueryBuilderContainerProps = Pick<
+  QueryBuilderProps,
   | 'defaultQuery'
   | 'initialVizState'
   | 'schemaVersion'
-  | 'dashboardSource'
-  | 'onVizStateChanged'
+  | 'extra'
   | 'onSchemaChange'
->;
+  | 'onQueryChange'
+> &
+  Pick<QueryTabsProps, 'onTabChange'>;
 
-export function QueryBuilderContainer({
-  apiUrl,
-  token,
-  dashboardSource,
-  ...props
-}: QueryBuilderContainerProps) {
-  const { location } = useHistory();
-  const params = new URLSearchParams(location.search);
-  const query = JSON.parse(params.get('query') || '{}');
-
-  const { token: securityContextToken, setIsModalOpen } = useSecurityContext();
-  const livePreviewContext = useLivePreviewContext();
-
-  const currentToken = securityContextToken || token;
+export function QueryBuilderContainer(props: QueryBuilderContainerProps) {
+  const { apiUrl } = useAppContext();
+  const {
+    currentToken,
+    token: securityContextToken,
+    setIsModalOpen,
+  } = useSecurityContext();
 
   useLayoutEffect(() => {
     if (apiUrl && currentToken) {
@@ -69,76 +84,112 @@ export function QueryBuilderContainer({
 
   const cubejsApi = useCubejsApi(apiUrl, currentToken);
 
+  if (!cubejsApi) {
+    return <CubeLoader />;
+  }
+
   return (
-    <CubeProvider cubejsApi={cubejsApi}>
-      <StyledCard bordered={false}>
-        <QueryTabs
-          query={query}
-          sidebar={
-            <Space direction="horizontal">
-              <Button.Group>
-                <Button
-                  data-testid="security-context-btn"
-                  icon={<LockOutlined />}
-                  size="small"
-                  type={securityContextToken ? 'primary' : 'default'}
-                  onClick={() => setIsModalOpen(true)}
-                >
-                  {securityContextToken ? 'Edit' : 'Add'} Security Context
-                </Button>
-
-                {livePreviewContext && !livePreviewContext.livePreviewDisabled && (
-                  <Button
-                    data-testid="live-preview-btn"
-                    icon={<CloudOutlined />}
-                    size="small"
-                    type={
-                      livePreviewContext.statusLivePreview.active
-                        ? 'primary'
-                        : 'default'
-                    }
-                    onClick={() =>
-                      livePreviewContext.statusLivePreview.active
-                        ? livePreviewContext.stopLivePreview()
-                        : livePreviewContext.startLivePreview()
-                    }
-                  >
-                    {livePreviewContext.statusLivePreview.active
-                      ? 'Stop'
-                      : 'Start'}{' '}
-                    Live Preview
-                  </Button>
-                )}
-              </Button.Group>
-
-              {livePreviewContext?.statusLivePreview.active && (
-                <LivePreviewBar />
-              )}
-            </Space>
-          }
-        >
-          {({ id, query, chartType }, saveTab) => (
-            <PlaygroundQueryBuilder
-              queryId={id}
+    <CubeProvider cubeApi={cubejsApi}>
+      <RollupDesignerContext apiUrl={apiUrl!}>
+        <ChartRendererStateProvider>
+          <StyledCard bordered={false}>
+            <QueryTabsRenderer
               apiUrl={apiUrl!}
-              cubejsToken={currentToken!}
-              initialVizState={{
-                query,
-                chartType,
-              }}
-              dashboardSource={dashboardSource}
+              token={currentToken!}
+              securityContextToken={securityContextToken}
+              extra={props.extra}
               schemaVersion={props.schemaVersion}
-              onVizStateChanged={(vizState) => {
-                saveTab({
-                  query: vizState.query || {},
-                  chartType: vizState.chartType,
-                });
-                props.onVizStateChanged?.(vizState);
-              }}
+              onSchemaChange={props.onSchemaChange}
+              onQueryChange={props.onQueryChange}
+              onTabChange={props.onTabChange}
+              onSecurityContextModalOpen={() => setIsModalOpen(true)}
             />
-          )}
-        </QueryTabs>
-      </StyledCard>
+          </StyledCard>
+        </ChartRendererStateProvider>
+      </RollupDesignerContext>
     </CubeProvider>
+  );
+}
+
+type QueryTabsRendererProps = {
+  apiUrl: string;
+  token: string;
+  securityContextToken: string | null;
+  onSecurityContextModalOpen: () => void;
+} & Pick<
+  QueryBuilderProps,
+  'schemaVersion' | 'onSchemaChange' | 'onQueryChange' | 'extra'
+> &
+  Pick<QueryTabsProps, 'onTabChange'>;
+
+function QueryTabsRenderer({
+  apiUrl,
+  token,
+  onQueryChange,
+  securityContextToken,
+  onSecurityContextModalOpen,
+  ...props
+}: QueryTabsRendererProps) {
+  const { location } = useHistory();
+  const { setQuery, toggleModal, isLoading } = useRollupDesignerContext();
+  const { isAddRollupButtonVisible } = useCloud();
+
+  const params = new URLSearchParams(location.search);
+  const query = JSON.parse(params.get('query') || 'null');
+
+  return (
+    <QueryTabs
+      query={query}
+      sidebar={
+        <Space direction="horizontal">
+          <Button
+            data-testid="security-context-btn"
+            isLoading={isLoading}
+            icon={<LockIcon />}
+            size="small"
+            type={securityContextToken ? 'primary' : 'secondary'}
+            onPress={onSecurityContextModalOpen}
+          >
+            {securityContextToken ? 'Edit' : 'Add'} Security Context
+          </Button>
+
+          {isAddRollupButtonVisible == null || isAddRollupButtonVisible ? (
+            <Button
+              data-testid="rd-btn"
+              isLoading={isLoading}
+              icon={<ThunderboltIcon />}
+              size="small"
+              onPress={() => toggleModal()}
+            >
+              Add Rollup to Data Model
+            </Button>
+          ) : null}
+        </Space>
+      }
+      onTabChange={(tab) => {
+        props.onTabChange?.(tab);
+        setQuery(tab.query);
+      }}
+    >
+      {({ id, query, chartType }, saveTab) => (
+        <Panel key={id} height="(100vh - 12.5x) (100vh - 12.5x)" fill="#white">
+          <QueryBuilder
+            apiUrl={apiUrl}
+            apiToken={token}
+            defaultQuery={query}
+            defaultChartType={chartType}
+            schemaVersion={props.schemaVersion}
+            extra={props.extra ?? null}
+            RequestStatusComponent={RequestStatusComponent}
+            VizardComponent={Vizard}
+            onSchemaChange={props.onSchemaChange}
+            onQueryChange={(data) => {
+              saveTab(data);
+              onQueryChange?.(data);
+            }}
+          />
+        </Panel>
+      )}
+    </QueryTabs>
   );
 }

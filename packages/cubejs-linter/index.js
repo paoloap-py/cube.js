@@ -4,14 +4,14 @@ module.exports = {
   env: {
     node: true,
   },
-  plugins: [
-    'import',
-    '@typescript-eslint/eslint-plugin',
-  ],
+  plugins: ['import', '@typescript-eslint/eslint-plugin'],
   parser: '@typescript-eslint/parser',
   parserOptions: {
     sourceType: 'module',
-    ecmaVersion: 2020
+    ecmaVersion: 2020,
+    ecmaFeatures: {
+      legacyDecorators: true,
+    },
   },
   rules: {
     'no-useless-constructor': 0,
@@ -33,13 +33,8 @@ module.exports = {
     'no-plusplus': 0,
     'no-await-in-loop': 0,
     'operator-linebreak': 0,
-    'max-len': ['error', 120, 2, {
-      ignoreUrls: true,
-      ignoreComments: false,
-      ignoreRegExpLiterals: true,
-      ignoreStrings: true,
-      ignoreTemplateLiterals: true,
-    }],
+    // linter can't fix this itself and, in some cases, conflicts with `arrow-body-style`
+    'max-len': 0,
     'no-trailing-spaces': ['warn', { skipBlankLines: true }],
     'object-curly-newline': 0,
     // TypeScript Recommended
@@ -49,13 +44,36 @@ module.exports = {
     '@typescript-eslint/no-empty-function': 'error',
     'no-extra-semi': 'off',
     '@typescript-eslint/no-extra-semi': 'error',
+    'no-underscore-dangle': 'off',
     'no-unused-vars': 'off',
-    '@typescript-eslint/no-unused-vars': 'warn',
+    '@typescript-eslint/no-unused-vars': [
+      'warn',
+      {
+        argsIgnorePattern: '^_.*',
+        varsIgnorePattern: '^_.*',
+      },
+    ],
     // '@typescript-eslint/no-var-requires': 'error',
     '@typescript-eslint/prefer-as-const': 'error',
     '@typescript-eslint/prefer-namespace-keyword': 'error',
     '@typescript-eslint/triple-slash-reference': 'error',
     '@typescript-eslint/type-annotation-spacing': 'error',
+    '@typescript-eslint/space-infix-ops': 'error',
+    'no-restricted-syntax': [
+      'error',
+      {
+        selector: 'ForInStatement',
+        message: 'for..in loops iterate over the entire prototype chain, which is virtually never what you want. Use Object.{keys,values,entries}, and iterate over the resulting array.',
+      },
+      {
+        selector: 'LabeledStatement',
+        message: 'Labels are a form of GOTO; using them makes code confusing and hard to maintain and understand.',
+      },
+      {
+        selector: 'WithStatement',
+        message: '`with` is disallowed in strict mode because it makes code impossible to predict and optimize.',
+      },
+    ],
   },
   overrides: [
     {

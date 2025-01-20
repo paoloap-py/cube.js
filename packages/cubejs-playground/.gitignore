@@ -11,6 +11,8 @@
 # production
 /build
 /dist
+/public/vizard
+/vizard/public/preview/
 
 # misc
 .DS_Store
@@ -26,3 +28,4 @@ yarn-error.log*
 
 /charts-dist
 /lib
+/.rollup.cache/

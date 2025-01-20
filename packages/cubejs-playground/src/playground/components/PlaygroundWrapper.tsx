@@ -9,6 +9,7 @@ import {
   SecurityContextProviderProps,
 } from '../../components/SecurityContext/SecurityContextProvider';
 import {
+  AppContextProps,
   AppContextProvider,
   PlaygroundContext,
 } from '../../components/AppContext';
@@ -21,11 +22,14 @@ const StyledWrapper = styled.div`
 type PlaygroundWrapperProps = {
   children: ReactNode;
   identifier?: string;
-  playgroundContext?: PlaygroundContext;
+  playgroundContext?: Partial<PlaygroundContext>;
 } & Pick<SecurityContextProps, 'token' | 'onTokenPayloadChange'> &
-  Pick<SecurityContextProviderProps, 'tokenUpdater'>;
+  Pick<SecurityContextProviderProps, 'tokenUpdater'> &
+  Pick<AppContextProps, 'apiUrl'>;
 
 export function PlaygroundWrapper({
+  token,
+  apiUrl,
   identifier,
   playgroundContext,
   children,
@@ -36,8 +40,10 @@ export function PlaygroundWrapper({
     <StyledWrapper>
       <BrowserRouter>
         <AppContextProvider
+          token={token}
+          apiUrl={apiUrl}
           identifier={identifier}
-          playgroundContext={playgroundContext}
+          playgroundContext={playgroundContext || {}}
         >
           <SecurityContextProvider
             tokenUpdater={tokenUpdater}

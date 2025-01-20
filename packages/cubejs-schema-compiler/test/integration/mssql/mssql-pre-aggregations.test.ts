@@ -2,6 +2,7 @@ import R from 'ramda';
 import { MssqlQuery } from '../../../src/adapter/MssqlQuery';
 import { prepareCompiler } from '../../unit/PrepareCompiler';
 import { MSSqlDbRunner } from './MSSqlDbRunner';
+import { createJoinedCubesSchema } from '../../unit/utils';
 
 describe('MSSqlPreAggregations', () => {
   jest.setTimeout(200000);
@@ -17,7 +18,7 @@ describe('MSSqlPreAggregations', () => {
       sql: \`
       select * from ##visitors
       \`,
-      
+
       joins: {
         visitor_checkins: {
           relationship: 'hasMany',
@@ -29,22 +30,22 @@ describe('MSSqlPreAggregations', () => {
         count: {
           type: 'count'
         },
-        
+
         checkinsTotal: {
           sql: \`\${checkinsCount}\`,
           type: 'sum'
         },
-        
+
         uniqueSourceCount: {
           sql: 'source',
           type: 'countDistinct'
         },
-        
+
         countDistinctApprox: {
           sql: 'id',
           type: 'countDistinctApprox'
         },
-        
+
         ratio: {
           sql: \`1.0 * \${uniqueSourceCount} / nullif(\${checkinsTotal}, 0)\`,
           type: 'number'
@@ -71,13 +72,13 @@ describe('MSSqlPreAggregations', () => {
           subQuery: true
         }
       },
-      
+
       segments: {
         google: {
           sql: \`source = 'google'\`
         }
       },
-      
+
       preAggregations: {
         default: {
           type: 'originalSql'
@@ -124,8 +125,8 @@ describe('MSSqlPreAggregations', () => {
         }
       }
     })
-    
-    
+
+
     cube('visitor_checkins', {
       sql: \`
       select * from ##visitor_checkins
@@ -156,7 +157,7 @@ describe('MSSqlPreAggregations', () => {
           sql: 'created_at'
         }
       },
-      
+
       preAggregations: {
         main: {
           type: 'originalSql'
@@ -167,12 +168,14 @@ describe('MSSqlPreAggregations', () => {
         }
       }
     })
-    
+
     cube('GoogleVisitors', {
       extends: visitors,
       sql: \`select v.* from \${visitors.sql()} v where v.source = 'google'\`
     })
     `);
+
+  const joinedSchemaCompilers = prepareCompiler(createJoinedCubesSchema());
 
   function replaceTableName(query, preAggregation, suffix) {
     const [toReplace, params] = query;
@@ -221,11 +224,7 @@ describe('MSSqlPreAggregations', () => {
     console.log(preAggregationsDescription);
 
     return dbRunner
-      .testQueries(
-        tempTablePreAggregations(preAggregationsDescription)
-          .concat([query.buildSqlAndParams()])
-          .map((q) => replaceTableName(q, preAggregationsDescription, 1))
-      )
+      .evaluateQueryWithPreAggregations(query)
       .then((res) => {
         expect(res).toEqual([
           {
@@ -277,15 +276,10 @@ describe('MSSqlPreAggregations', () => {
 
       expect(preAggregationsDescription[0].invalidateKeyQueries[0][0].replace(/(\r\n|\n|\r)/gm, '')
         .replace(/\s+/g, ' '))
-        .toMatch('SELECT CASE WHEN CURRENT_TIMESTAMP < DATEADD(day, 7, CAST(@_1 AS DATETIME2)) THEN FLOOR((DATEDIFF(SECOND,\'1970-01-01\', GETUTCDATE())) / 3600) END');
-      expect(preAggregationsDescription[0].invalidateKeyQueries[0][1][0])
-        .toEqual('2017-02-01T07:59:59Z');
+        .toMatch('SELECT CASE WHEN CURRENT_TIMESTAMP < DATEADD(day, 7, CAST(@_1 AS DATETIMEOFFSET)) THEN FLOOR((DATEDIFF(SECOND,\'1970-01-01\', GETUTCDATE())) / 3600) END');
 
-      return dbRunner.testQueries(tempTablePreAggregations(preAggregationsDescription)
-        .concat([
-          query.buildSqlAndParams()
-        ])
-        .map(q => replaceTableName(q, preAggregationsDescription, 103)))
+      return dbRunner
+        .evaluateQueryWithPreAggregations(query)
         .then(res => {
           expect(res)
             .toEqual([
@@ -343,11 +337,7 @@ describe('MSSqlPreAggregations', () => {
     expect(preAggregationsDescription[0].loadSql[0]).toMatch(/visitors_ratio/);
 
     return dbRunner
-      .testQueries(
-        tempTablePreAggregations(preAggregationsDescription)
-          .concat([query.buildSqlAndParams()])
-          .map((q) => replaceTableName(q, preAggregationsDescription, 10))
-      )
+      .evaluateQueryWithPreAggregations(query)
       .then((res) => {
         expect(res).toEqual([
           {
@@ -404,7 +394,7 @@ describe('MSSqlPreAggregations', () => {
     console.log(JSON.stringify(queries.concat(queryAndParams)));
 
     return dbRunner
-      .testQueries(queries.concat([queryAndParams]).map((q) => replaceTableName(q, preAggregationsDescription, 142)))
+      .evaluateQueryWithPreAggregations(query)
       .then((res) => {
         console.log(JSON.stringify(res));
         expect(res).toEqual([
@@ -415,4 +405,71 @@ describe('MSSqlPreAggregations', () => {
         ]);
       });
   }));
+
+  it('aggregating on top of sub-queries without filters', async () => {
+    await joinedSchemaCompilers.compiler.compile();
+    const query = new MssqlQuery({
+      joinGraph: joinedSchemaCompilers.joinGraph,
+      cubeEvaluator: joinedSchemaCompilers.cubeEvaluator,
+      compiler: joinedSchemaCompilers.compiler,
+    },
+    {
+      dimensions: ['E.eval'],
+      measures: ['B.bval_sum'],
+      order: [{ id: 'B.bval_sum' }],
+    });
+    const sql = query.buildSqlAndParams();
+    return dbRunner
+      .testQuery(sql)
+      .then((res) => {
+        expect(res).toEqual([
+          {
+            e__eval: 'E',
+            b__bval_sum: 20,
+          },
+          {
+            e__eval: 'F',
+            b__bval_sum: 40,
+          },
+          {
+            e__eval: 'G',
+            b__bval_sum: 60,
+          },
+          {
+            e__eval: 'H',
+            b__bval_sum: 80,
+          },
+        ]);
+      });
+  });
+
+  it('aggregating on top of sub-queries with filter', async () => {
+    await joinedSchemaCompilers.compiler.compile();
+    const query = new MssqlQuery({
+      joinGraph: joinedSchemaCompilers.joinGraph,
+      cubeEvaluator: joinedSchemaCompilers.cubeEvaluator,
+      compiler: joinedSchemaCompilers.compiler,
+    },
+    {
+      dimensions: ['E.eval'],
+      measures: ['B.bval_sum'],
+      filters: [{
+        member: 'E.eval',
+        operator: 'equals',
+        values: ['E'],
+      }],
+      order: [{ id: 'B.bval_sum' }],
+    });
+    const sql = query.buildSqlAndParams();
+    return dbRunner
+      .testQuery(sql)
+      .then((res) => {
+        expect(res).toEqual([
+          {
+            e__eval: 'E',
+            b__bval_sum: 20,
+          },
+        ]);
+      });
+  });
 });

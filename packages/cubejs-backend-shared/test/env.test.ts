@@ -1,18 +1,18 @@
-import { getEnv, convertTimeStrToMs } from '../src/env';
+import { getEnv, convertTimeStrToSeconds } from '../src/env';
 
 test('convertTimeStrToMs', () => {
-  expect(convertTimeStrToMs('1', 'VARIABLE_ENV')).toBe(1);
-  expect(convertTimeStrToMs('1s', 'VARIABLE_ENV')).toBe(1);
-  expect(convertTimeStrToMs('5s', 'VARIABLE_ENV')).toBe(5);
-  expect(convertTimeStrToMs('1m', 'VARIABLE_ENV')).toBe(1 * 60);
-  expect(convertTimeStrToMs('10m', 'VARIABLE_ENV')).toBe(10 * 60);
-  expect(convertTimeStrToMs('1h', 'VARIABLE_ENV')).toBe(60 * 60);
-  expect(convertTimeStrToMs('2h', 'VARIABLE_ENV')).toBe(2 * 60 * 60);
+  expect(convertTimeStrToSeconds('1', 'VARIABLE_ENV')).toBe(1);
+  expect(convertTimeStrToSeconds('1s', 'VARIABLE_ENV')).toBe(1);
+  expect(convertTimeStrToSeconds('5s', 'VARIABLE_ENV')).toBe(5);
+  expect(convertTimeStrToSeconds('1m', 'VARIABLE_ENV')).toBe(1 * 60);
+  expect(convertTimeStrToSeconds('10m', 'VARIABLE_ENV')).toBe(10 * 60);
+  expect(convertTimeStrToSeconds('1h', 'VARIABLE_ENV')).toBe(60 * 60);
+  expect(convertTimeStrToSeconds('2h', 'VARIABLE_ENV')).toBe(2 * 60 * 60);
 });
 
 test('convertTimeStrToMs(exception)', () => {
-  expect(() => convertTimeStrToMs('', 'VARIABLE_ENV')).toThrowError(
-    `Value "" is not valid for VARIABLE_ENV. Must be number (in seconds) or string in time format (1s, 1m, 1h).`
+  expect(() => convertTimeStrToSeconds('', 'VARIABLE_ENV')).toThrowError(
+    `Value "" is not valid for VARIABLE_ENV. Must be a number in seconds or duration string (1s, 1m, 1h).`
   );
 });
 
@@ -31,59 +31,63 @@ describe('getEnv', () => {
     );
   });
 
-  test('refreshTimer', () => {
+  test('refreshWorkerMode (from refreshTimer)', () => {
     process.env.NODE_ENV = 'production';
     delete process.env.CUBEJS_SCHEDULED_REFRESH_TIMER;
-    expect(getEnv('refreshTimer')).toBe(false);
+    expect(getEnv('refreshWorkerMode')).toBe(false);
 
     process.env.NODE_ENV = 'development';
     delete process.env.CUBEJS_SCHEDULED_REFRESH_TIMER;
-    expect(getEnv('refreshTimer')).toBe(true);
+    expect(getEnv('refreshWorkerMode')).toBe(true);
 
     process.env.CUBEJS_SCHEDULED_REFRESH_TIMER = '60';
-    expect(getEnv('refreshTimer')).toBe(60);
+    expect(getEnv('refreshWorkerMode')).toBe(60);
 
     process.env.CUBEJS_SCHEDULED_REFRESH_TIMER = '1m';
-    expect(getEnv('refreshTimer')).toBe(60);
+    expect(getEnv('refreshWorkerMode')).toBe(60);
 
     process.env.CUBEJS_SCHEDULED_REFRESH_TIMER = 'true';
-    expect(getEnv('refreshTimer')).toBe(true);
+    expect(getEnv('refreshWorkerMode')).toBe(true);
 
     process.env.CUBEJS_SCHEDULED_REFRESH_TIMER = 'false';
-    expect(getEnv('refreshTimer')).toBe(false);
+    expect(getEnv('refreshWorkerMode')).toBe(false);
 
     process.env.CUBEJS_SCHEDULED_REFRESH_TIMER = 'True';
-    expect(getEnv('refreshTimer')).toBe(true);
+    expect(getEnv('refreshWorkerMode')).toBe(true);
 
     process.env.CUBEJS_SCHEDULED_REFRESH_TIMER = 'False';
-    expect(getEnv('refreshTimer')).toBe(false);
+    expect(getEnv('refreshWorkerMode')).toBe(false);
   });
 
-  test('refreshTimer(exception)', () => {
+  test('refreshWorkerMode(exception)', () => {
     process.env.CUBEJS_SCHEDULED_REFRESH_TIMER = '11fffffff';
 
-    expect(() => getEnv('refreshTimer')).toThrowError(
+    expect(() => getEnv('refreshWorkerMode')).toThrowError(
       'Value "11fffffff" is not valid for CUBEJS_SCHEDULED_REFRESH_TIMER. Should be boolean or number (in seconds) or string in time format (1s, 1m, 1h)'
     );
   });
 
   test('dbPollTimeout', () => {
-    expect(getEnv('dbPollTimeout')).toBe(15 * 60);
-
     process.env.CUBEJS_DB_POLL_TIMEOUT = '1m';
-    expect(getEnv('dbPollTimeout')).toBe(60);
+    expect(
+      getEnv('dbPollTimeout', { dataSource: 'default' })
+    ).toBe(60);
   });
 
   test('dbPollMaxInterval', () => {
-    expect(getEnv('dbPollMaxInterval')).toBe(5);
+    expect(
+      getEnv('dbPollMaxInterval', { dataSource: 'default' })
+    ).toBe(5);
 
     process.env.CUBEJS_DB_POLL_MAX_INTERVAL = '10s';
-    expect(getEnv('dbPollMaxInterval')).toBe(10);
+    expect(
+      getEnv('dbPollMaxInterval', { dataSource: 'default' })
+    ).toBe(10);
   });
 
   test('livePreview', () => {
-    expect(getEnv('livePreview')).toBe(false);
-    
+    expect(getEnv('livePreview')).toBe(true);
+
     process.env.CUBEJS_LIVE_PREVIEW = 'true';
     expect(getEnv('livePreview')).toBe(true);
 

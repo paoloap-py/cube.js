@@ -18,13 +18,13 @@ describe('ClickHouse JoinGraph', () => {
       type: 'number',
       sql: new Function('visitor_revenue', 'visitor_count', 'return visitor_revenue + "/" + visitor_count')
     }
-  
+
     cube(\`visitors\`, {
       sql: \`
-      select * from visitors WHERE \${USER_CONTEXT.source.filter('source')} AND
-      \${USER_CONTEXT.sourceArray.filter(sourceArray => \`source in (\${sourceArray.join(',')})\`)}
+      select * from visitors WHERE \${SECURITY_CONTEXT.source.filter('source')} AND
+      \${SECURITY_CONTEXT.sourceArray.filter(sourceArray => \`source in (\${sourceArray.join(',')})\`)}
       \`,
-      
+
       refreshKey: {
         sql: 'SELECT 1',
       },
@@ -113,24 +113,24 @@ describe('ClickHouse JoinGraph', () => {
           type: 'time',
           sql: 'created_at'
         },
-        
+
         createdAtSqlUtils: {
           type: 'time',
           sql: SQL_UTILS.convertTz('created_at')
         },
-        
+
         checkins: {
           sql: \`\${visitor_checkins.visitor_checkins_count}\`,
           type: \`number\`,
           subQuery: true
         },
-        
+
         subQueryFail: {
           sql: '2',
           type: \`number\`,
           subQuery: true
         },
-        
+
         doubledCheckings: {
           sql: \`\${checkins} * 2\`,
           type: 'number'
@@ -210,7 +210,7 @@ describe('ClickHouse JoinGraph', () => {
           subQuery: true
         },
       },
-      
+
       // preAggregations: {
       //   checkinSource: {
       //     type: 'rollup',
@@ -255,19 +255,19 @@ describe('ClickHouse JoinGraph', () => {
         }
       }
     })
-    
+
     cube('ReferenceVisitors', {
       sql: \`
-        select * from \${visitors.sql()} as t 
+        select * from \${visitors.sql()} as t
         WHERE \${FILTER_PARAMS.ReferenceVisitors.createdAt.filter(\`addDays(t.created_at, 28)\`)} AND
         \${FILTER_PARAMS.ReferenceVisitors.createdAt.filter((from, to) => \`(addDays(t.created_at,28)) >= parseDateTimeBestEffort(\${from}) AND (addDays(t.created_at, 28)) <= parseDateTimeBestEffort(\${to})\`)}
       \`,
-      
+
       measures: {
         count: {
           type: 'count'
         },
-        
+
         googleSourcedCount: {
           type: 'count',
           filters: [{
@@ -275,7 +275,7 @@ describe('ClickHouse JoinGraph', () => {
           }]
         },
       },
-      
+
       dimensions: {
         createdAt: {
           type: 'time',
@@ -285,8 +285,8 @@ describe('ClickHouse JoinGraph', () => {
     })
     `);
 
-  // FAILS - ClickHouse doesn't support OR in JOIN expressions
-  it.skip('simple join', () => {
+  // SUCCESS but need to finish query to override ::timestamptz
+  it('simple join', () => {
     const result = compiler.compile().then(() => {
       debugLog(joinGraph.buildJoin(['visitor_checkins', 'visitors']));
 
@@ -314,28 +314,28 @@ describe('ClickHouse JoinGraph', () => {
         expect(res).toEqual(
           [
             {
-              visitors__created_at_day: '2017-01-02T00:00:00.000Z',
+              visitors__created_at_day: '2017-01-02T00:00:00.000',
               visitors__visitor_revenue: '100',
               visitors__visitor_count: '1',
               visitor_checkins__visitor_checkins_count: '3',
               visitors__per_visitor_revenue: '100'
             },
             {
-              visitors__created_at_day: '2017-01-04T00:00:00.000Z',
+              visitors__created_at_day: '2017-01-04T00:00:00.000',
               visitors__visitor_revenue: '200',
               visitors__visitor_count: '1',
               visitor_checkins__visitor_checkins_count: '2',
               visitors__per_visitor_revenue: '200'
             },
             {
-              visitors__created_at_day: '2017-01-05T00:00:00.000Z',
+              visitors__created_at_day: '2017-01-05T00:00:00.000',
               visitors__visitor_revenue: null,
               visitors__visitor_count: '1',
               visitor_checkins__visitor_checkins_count: '1',
               visitors__per_visitor_revenue: null
             },
             {
-              visitors__created_at_day: '2017-01-06T00:00:00.000Z',
+              visitors__created_at_day: '2017-01-06T00:00:00.000',
               visitors__visitor_revenue: null,
               visitors__visitor_count: '2',
               visitor_checkins__visitor_checkins_count: '0',

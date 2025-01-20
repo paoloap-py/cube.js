@@ -8,7 +8,7 @@
       "path": "packages/cubejs-templates"
     },
     {
-      "path": "packages/cubejs-testing"
+      "path": "packages/cubejs-backend-native"
     },
     {
       "path": "packages/cubejs-backend-cloud"
@@ -17,19 +17,55 @@
       "path": "packages/cubejs-backend-maven"
     },
     {
-      "path": "packages/cubejs-api-gateway"
+      "path": "packages/cubejs-base-driver"
     },
     {
-      "path": "packages/cubejs-schema-compiler"
+      "path": "rust/cubestore"
+    },
+    {
+      "path": "packages/cubejs-cubestore-driver"
     },
     {
       "path": "packages/cubejs-query-orchestrator"
     },
     {
+      "path": "packages/cubejs-schema-compiler"
+    },
+    {
+      "path": "packages/cubejs-testing-shared"
+    },
+    {
+      "path": "packages/cubejs-api-gateway"
+    },
+    {
+      "path": "packages/cubejs-testing"
+    },
+    {
       "path": "packages/cubejs-druid-driver"
     },
     {
+      "path": "packages/cubejs-firebolt-driver"
+    },
+    {
+      "path": "packages/cubejs-mysql-driver"
+    },
+    {
       "path": "packages/cubejs-postgres-driver"
+    },
+    {
+      "path": "packages/cubejs-duckdb-driver"
+    },
+    {
+      "path": "packages/cubejs-dremio-driver"
+    },
+    {
+      "path": "packages/cubejs-questdb-driver"
+    },
+    {
+      "path": "packages/cubejs-materialize-driver"
+    },
+    {
+      "path": "packages/cubejs-crate-driver"
     },
     {
       "path": "packages/cubejs-mongobi-driver"
@@ -41,10 +77,16 @@
       "path": "packages/cubejs-redshift-driver"
     },
     {
+      "path": "packages/cubejs-athena-driver"
+    },
+    {
       "path": "packages/cubejs-bigquery-driver"
     },
     {
       "path": "packages/cubejs-snowflake-driver"
+    },
+    {
+      "path": "packages/cubejs-ksql-driver"
     },
     {
       "path": "packages/cubejs-jdbc-driver"
@@ -53,10 +95,13 @@
       "path": "packages/cubejs-databricks-jdbc-driver"
     },
     {
-      "path": "rust/"
+      "path": "packages/cubejs-prestodb-driver"
     },
     {
-      "path": "packages/cubejs-cubestore-driver"
+      "path": "packages/cubejs-trino-driver"
+    },
+    {
+      "path": "packages/cubejs-pinot-driver"
     },
     {
       "path": "packages/cubejs-server-core"
@@ -65,10 +110,13 @@
       "path": "packages/cubejs-server"
     },
     {
+      "path": "packages/cubejs-testing-drivers"
+    },
+    {
       "path": "packages/cubejs-cli"
     },
     {
-      "path": "rust"
+      "path": "packages/cubejs-dbt-schema-extension"
     }
   ]
 }

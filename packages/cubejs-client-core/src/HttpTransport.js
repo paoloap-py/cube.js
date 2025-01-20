@@ -20,8 +20,8 @@ class HttpTransport {
 
     let url = `${this.apiUrl}/${method}${searchParams.toString().length ? `?${searchParams}` : ''}`;
 
-    this.method = this.method || (url.length < 2000 ? 'GET' : 'POST');
-    if (this.method === 'POST') {
+    const requestMethod = this.method || (url.length < 2000 ? 'GET' : 'POST');
+    if (requestMethod === 'POST') {
       url = `${this.apiUrl}/${method}`;
       this.headers['Content-Type'] = 'application/json';
     }
@@ -29,20 +29,27 @@ class HttpTransport {
     // Currently, all methods make GET requests. If a method makes a request with a body payload,
     // remember to add {'Content-Type': 'application/json'} to the header.
     const runRequest = () => fetch(url, {
-      method: this.method,
+      method: requestMethod,
       headers: {
         Authorization: this.authorization,
         'x-request-id': baseRequestId && `${baseRequestId}-span-${spanCounter++}`,
         ...this.headers
       },
       credentials: this.credentials,
-      body: this.method === 'POST' ? JSON.stringify(params) : null
+      body: requestMethod === 'POST' ? JSON.stringify(params) : null
     });
 
     return {
+      /* eslint no-unsafe-finally: off */
       async subscribe(callback) {
-        const result = await runRequest();
-        return callback(result, () => this.subscribe(callback));
+        let result = {
+          error: 'network Error' // add default error message
+        };
+        try {
+          result = await runRequest();
+        } finally {
+          return callback(result, () => this.subscribe(callback));
+        }
       }
     };
   }

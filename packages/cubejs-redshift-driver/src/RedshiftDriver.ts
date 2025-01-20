@@ -1,67 +1,328 @@
-import { PostgresDriver, PostgresDriverConfiguration } from '@cubejs-backend/postgres-driver';
-import { DownloadTableCSVData, UnloadOptions } from '@cubejs-backend/query-orchestrator';
-import { getEnv } from '@cubejs-backend/shared';
-import crypto from 'crypto';
-import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { S3, GetObjectCommand } from '@aws-sdk/client-s3';
+/**
+ * @copyright Cube Dev, Inc.
+ * @license Apache-2.0
+ * @fileoverview The `RedshiftDriver` and related types declaration.
+ */
 
-interface RedshiftDriverExportAWS {
+import { assertDataSource, getEnv } from '@cubejs-backend/shared';
+import { PostgresDriver, PostgresDriverConfiguration } from '@cubejs-backend/postgres-driver';
+import {
+  DatabaseStructure,
+  DownloadTableCSVData,
+  DriverCapabilities,
+  QueryColumnsResult,
+  QuerySchemasResult,
+  QueryTablesResult,
+  StreamOptions,
+  StreamTableDataWithTypes,
+  UnloadOptions
+} from '@cubejs-backend/base-driver';
+import crypto from 'crypto';
+
+interface RedshiftDriverExportRequiredAWS {
   bucketType: 's3',
   bucketName: string,
-  keyId: string,
-  secretKey: string,
   region: string,
+}
+
+interface RedshiftDriverExportArnAWS extends RedshiftDriverExportRequiredAWS{
+  // ARN used to access S3 unload data from e.g. EC2 instances, instead of explicit key/secret credentials.
+  // See https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_switch-role-ec2.html
+  // Resources needing to read these files will need proper read permissions on their role as well.
+  unloadArn?: string,
+}
+
+interface RedshiftDriverExportKeySecretAWS extends RedshiftDriverExportRequiredAWS{
+  keyId?: string,
+  secretKey?: string,
+}
+
+interface RedshiftDriverExportAWS extends RedshiftDriverExportArnAWS, RedshiftDriverExportKeySecretAWS {
 }
 
 export interface RedshiftDriverConfiguration extends PostgresDriverConfiguration {
   exportBucket?: RedshiftDriverExportAWS;
 }
 
+const IGNORED_SCHEMAS = ['pg_catalog', 'pg_internal', 'information_schema', 'mysql', 'performance_schema', 'sys', 'INFORMATION_SCHEMA'];
+
+/**
+ * Redshift driver class.
+ */
 export class RedshiftDriver extends PostgresDriver<RedshiftDriverConfiguration> {
-  public constructor(options: RedshiftDriverConfiguration = {}) {
-    super(options);
+  private readonly dbName: string;
+
+  /**
+   * Returns default concurrency value.
+   */
+  public static getDefaultConcurrency(): number {
+    return 4;
   }
 
-  protected getInitialConfiguration(): Partial<RedshiftDriverConfiguration> {
+  /**
+   * Class constructor.
+   */
+  public constructor(
+    config: RedshiftDriverConfiguration & {
+      /**
+       * Data source name.
+       */
+      dataSource?: string,
+
+      /**
+       * Max pool size value for the [cube]<-->[db] pool.
+       */
+      maxPoolSize?: number,
+
+      /**
+       * Time to wait for a response from a connection after validation
+       * request before determining it as not valid. Default - 10000 ms.
+       */
+      testConnectionTimeout?: number,
+    } = {}
+  ) {
+    super(config);
+
+    const dataSource =
+      config.dataSource ||
+      assertDataSource('default');
+
+    // We need a DB name for querying external tables.
+    // It's not possible to get it later from the pool
+    this.dbName = getEnv('dbName', { dataSource });
+  }
+
+  protected primaryKeysQuery() {
+    return null;
+  }
+
+  protected foreignKeysQuery() {
+    return null;
+  }
+
+  /**
+   * @override
+   */
+  protected override informationSchemaQuery() {
+    return `
+      SELECT columns.column_name as ${this.quoteIdentifier('column_name')},
+             columns.table_name as ${this.quoteIdentifier('table_name')},
+             columns.table_schema as ${this.quoteIdentifier('table_schema')},
+             columns.data_type as ${this.quoteIdentifier('data_type')}
+      FROM information_schema.columns
+      WHERE columns.table_schema NOT IN (${IGNORED_SCHEMAS.map(s => `'${s}'`).join(',')})
+   `;
+  }
+
+  /**
+   * In Redshift external tables are not shown in regular Postgres information_schema,
+   * so it needs to be queried separately.
+   * @override
+   */
+  public override async tablesSchema(): Promise<DatabaseStructure> {
+    const query = this.informationSchemaQuery();
+    const tablesSchema = await this.query(query, []).then(data => data.reduce<DatabaseStructure>(this.informationColumnsSchemaReducer, {}));
+
+    const allSchemas = await this.getSchemas();
+    const externalSchemas = allSchemas.filter(s => !tablesSchema[s.schema_name]).map(s => s.schema_name);
+
+    for (const externalSchema of externalSchemas) {
+      tablesSchema[externalSchema] = {};
+      const tablesRes = await this.tablesForExternalSchema(externalSchema);
+      const tables = tablesRes.map(t => t.table_name);
+      for (const tableName of tables) {
+        const columnRes = await this.columnsForExternalTable(externalSchema, tableName);
+        tablesSchema[externalSchema][tableName] = columnRes.map(def => ({
+          name: def.column_name,
+          type: def.data_type,
+          attributes: []
+        }));
+      }
+    }
+
+    return tablesSchema;
+  }
+
+  // eslint-disable-next-line camelcase
+  private async tablesForExternalSchema(schemaName: string): Promise<{ table_name: string }[]> {
+    return this.query(`SHOW TABLES FROM SCHEMA ${this.dbName}.${schemaName}`, []);
+  }
+
+  private async columnsForExternalTable(schemaName: string, tableName: string): Promise<QueryColumnsResult[]> {
+    return this.query(`SHOW COLUMNS FROM TABLE ${this.dbName}.${schemaName}.${tableName}`, []);
+  }
+
+  /**
+   * @override
+   */
+  protected override getSchemasQuery() {
+    return `
+      SELECT table_schema as ${this.quoteIdentifier('schema_name')}
+      FROM information_schema.tables
+      WHERE table_schema NOT IN (${IGNORED_SCHEMAS.map(s => `'${s}'`).join(',')})
+      GROUP BY table_schema
+    `;
+  }
+
+  /**
+   * From the Redshift docs:
+   * SHOW SCHEMAS FROM DATABASE database_name [LIKE 'filter_pattern'] [LIMIT row_limit ]
+   * It returns regular schemas (queryable from information_schema) and external ones.
+   * @override
+   */
+  public override async getSchemas(): Promise<QuerySchemasResult[]> {
+    const schemas = await this.query<QuerySchemasResult>(`SHOW SCHEMAS FROM DATABASE ${this.dbName}`, []);
+
+    return schemas
+      .filter(s => !IGNORED_SCHEMAS.includes(s.schema_name))
+      .map(s => ({ schema_name: s.schema_name }));
+  }
+
+  public override async getTablesForSpecificSchemas(schemas: QuerySchemasResult[]): Promise<QueryTablesResult[]> {
+    const tables = await super.getTablesForSpecificSchemas(schemas);
+
+    // We might request the external schemas and tables, their descriptions won't be returned
+    // by the super.getTablesForSpecificSchemas(). Need to request them separately.
+    const missedSchemas = schemas.filter(s => !tables.some(t => t.schema_name === s.schema_name));
+
+    for (const externalSchema of missedSchemas) {
+      const tablesRes = await this.tablesForExternalSchema(externalSchema.schema_name);
+      tablesRes.forEach(t => {
+        tables.push({ schema_name: externalSchema.schema_name, table_name: t.table_name });
+      });
+    }
+
+    return tables;
+  }
+
+  public override async getColumnsForSpecificTables(tables: QueryTablesResult[]): Promise<QueryColumnsResult[]> {
+    const columns = await super.getColumnsForSpecificTables(tables);
+
+    // We might request the external tables, their descriptions won't be returned
+    // by the super.getColumnsForSpecificTables(). Need to request them separately.
+    const missedTables = tables.filter(table => !columns.some(column => column.schema_name === table.schema_name && column.table_name === table.table_name));
+
+    for (const table of missedTables) {
+      const columnRes = await this.columnsForExternalTable(table.schema_name, table.table_name);
+      columnRes.forEach(c => {
+        columns.push({
+          schema_name: c.schema_name,
+          table_name: c.table_name,
+          column_name: c.column_name,
+          data_type: c.data_type,
+        });
+      });
+    }
+
+    return columns;
+  }
+
+  /**
+   * @override
+   */
+  protected getInitialConfiguration(
+    dataSource: string,
+  ): Partial<RedshiftDriverConfiguration> {
     return {
       // @todo It's not possible to support UNLOAD in readOnly mode, because we need column types (CREATE TABLE?)
       readOnly: false,
-      exportBucket: this.getExportBucket(),
+      exportBucket: this.getExportBucket(dataSource),
     };
   }
 
-  protected getExportBucket(): RedshiftDriverExportAWS|undefined {
-    const exportBucket: Partial<RedshiftDriverExportAWS> = {
+  protected static checkValuesLimit(values?: unknown[]) {
+    // Redshift server is not exactly compatible with PostgreSQL protocol
+    // And breaks after 32767 parameter values with `there is no parameter $-32768`
+    // This is a bug/misbehaviour on server side, nothing we can do besides generate a more meaningful error
+    const length = (values?.length ?? 0);
+    if (length >= 32768) {
+      throw new Error(`Redshift server does not support more than 32767 parameters, but ${length} passed`);
+    }
+  }
+
+  /**
+   * AWS Redshift doesn't have any special connection check.
+   * And querying even system tables is billed.
+   * @override
+   */
+  public override async testConnection() {
+    const conn = await this.pool.connect();
+    conn.release();
+  }
+
+  public override async stream(
+    query: string,
+    values: unknown[],
+    options: StreamOptions
+  ): Promise<StreamTableDataWithTypes> {
+    RedshiftDriver.checkValuesLimit(values);
+
+    return super.stream(query, values, options);
+  }
+
+  protected override async queryResponse(query: string, values: unknown[]) {
+    RedshiftDriver.checkValuesLimit(values);
+
+    return super.queryResponse(query, values);
+  }
+
+  protected getExportBucket(
+    dataSource: string,
+  ): RedshiftDriverExportAWS | undefined {
+    const supportedBucketTypes = ['s3'];
+
+    const requiredExportBucket: Partial<RedshiftDriverExportRequiredAWS> = {
       bucketType: getEnv('dbExportBucketType', {
-        supported: ['s3']
+        supported: supportedBucketTypes,
+        dataSource,
       }),
-      bucketName: getEnv('dbExportBucket'),
-      keyId: getEnv('dbExportBucketAwsKey'),
-      secretKey: getEnv('dbExportBucketAwsSecret'),
-      region: getEnv('dbExportBucketAwsRegion'),
+      bucketName: getEnv('dbExportBucket', { dataSource }),
+      region: getEnv('dbExportBucketAwsRegion', { dataSource }),
+    };
+
+    const exportBucket: Partial<RedshiftDriverExportAWS> = {
+      ...requiredExportBucket,
+      keyId: getEnv('dbExportBucketAwsKey', { dataSource }),
+      secretKey: getEnv('dbExportBucketAwsSecret', { dataSource }),
+      unloadArn: getEnv('redshiftUnloadArn', { dataSource }),
     };
 
     if (exportBucket.bucketType) {
-      const supportedBucketTypes = ['s3'];
-
       if (!supportedBucketTypes.includes(exportBucket.bucketType)) {
         throw new Error(
           `Unsupported EXPORT_BUCKET_TYPE, supported: ${supportedBucketTypes.join(',')}`
         );
       }
 
-      const emptyKeys = Object.keys(exportBucket)
-        .filter((key: string) => exportBucket[<keyof RedshiftDriverExportAWS>key] === undefined);
-      if (emptyKeys.length) {
+      // Make sure the required keys are set
+      const emptyRequiredKeys = Object.keys(requiredExportBucket)
+        .filter((key: string) => requiredExportBucket[<keyof RedshiftDriverExportRequiredAWS>key] === undefined);
+      if (emptyRequiredKeys.length) {
         throw new Error(
-          `Unsupported configuration exportBucket, some configuration keys are empty: ${emptyKeys.join(',')}`
+          `Unsupported configuration exportBucket, some configuration keys are empty: ${emptyRequiredKeys.join(',')}`
         );
+      }
+      // If unload ARN is not set, secret and key id must be set for Redshift
+      if (!exportBucket.unloadArn) {
+        // Make sure the required keys are set
+        const emptySecretKeys = Object.keys(exportBucket)
+          .filter((key: string) => key !== 'unloadArn')
+          .filter((key: string) => exportBucket[<keyof RedshiftDriverExportAWS>key] === undefined);
+        if (emptySecretKeys.length) {
+          throw new Error(
+            `Unsupported configuration exportBucket, some configuration keys are empty: ${emptySecretKeys.join(',')}`
+          );
+        }
       }
 
       return <RedshiftDriverExportAWS>exportBucket;
     }
 
     return undefined;
+  }
+
+  public async loadUserDefinedTypes(): Promise<void> {
+    // @todo Implement for Redshift, column \"typcategory\" does not exist in pg_type
   }
 
   public async isUnloadSupported() {
@@ -72,12 +333,15 @@ export class RedshiftDriver extends PostgresDriver<RedshiftDriverConfiguration> 
     return false;
   }
 
-  public async unload(table: string, options: UnloadOptions): Promise<DownloadTableCSVData> {
+  public async unload(tableName: string, options: UnloadOptions): Promise<DownloadTableCSVData> {
     if (!this.config.exportBucket) {
       throw new Error('Unload is not configured');
     }
 
-    const { bucketType, bucketName, keyId, secretKey, region } = this.config.exportBucket;
+    const types = await this.tableColumnTypes(tableName);
+    const columns = types.map(t => t.name).join(', ');
+
+    const { bucketType, bucketName, region, unloadArn, keyId, secretKey } = this.config.exportBucket;
 
     const conn = await this.pool.connect();
 
@@ -96,10 +360,10 @@ export class RedshiftDriver extends PostgresDriver<RedshiftDriverConfiguration> 
         .join(' ');
 
       await this.prepareConnection(conn, {
-        executionTimeout: 600000,
+        executionTimeout: this.config.executionTimeout ? this.config.executionTimeout * 1000 : 600000,
       });
 
-      let unloadTotalRows: number|null = null;
+      let unloadTotalRows: number | null = null;
 
       /**
        * @link https://github.com/brianc/node-postgres/blob/pg%408.6.0/packages/pg-protocol/src/messages.ts#L211
@@ -118,51 +382,61 @@ export class RedshiftDriver extends PostgresDriver<RedshiftDriverConfiguration> 
         }
       });
 
+      const baseQuery = `
+        UNLOAD ('SELECT ${columns} FROM ${tableName}')
+        TO '${bucketType}://${bucketName}/${exportPathName}/'
+      `;
+
+      // Prefer the unloadArn if it is present
+      const credentialQuery = unloadArn
+        ? `iam_role '${unloadArn}'`
+        : `CREDENTIALS 'aws_access_key_id=${keyId};aws_secret_access_key=${secretKey}'`;
+
+      const unloadQuery = `${baseQuery} ${credentialQuery} ${optionsPart}`;
+
       // Unable to extract number of extracted rows, because it's done in protocol notice
       await conn.query({
-        text: (
-          `UNLOAD ('SELECT * FROM ${table}') TO '${bucketType}://${bucketName}/${exportPathName}/' ` +
-          `CREDENTIALS 'aws_access_key_id=${keyId};aws_secret_access_key=${secretKey}' ${optionsPart}`
-        ),
+        text: unloadQuery,
       });
+
       if (unloadTotalRows === 0) {
         return {
+          exportBucketCsvEscapeSymbol: this.config.exportBucketCsvEscapeSymbol,
           csvFile: [],
+          types
         };
       }
 
-      const client = new S3({
-        credentials: {
-          accessKeyId: keyId,
-          secretAccessKey: secretKey,
+      const csvFile = await this.extractUnloadedFilesFromS3(
+        {
+          credentials: (keyId && secretKey) ? {
+            accessKeyId: keyId,
+            secretAccessKey: secretKey,
+          } : undefined,
+          region,
         },
-        region,
-      });
-      const list = await client.listObjectsV2({
-        Bucket: bucketName,
-        Prefix: exportPathName,
-      });
-      if (list && list.Contents) {
-        const csvFile = await Promise.all(
-          list.Contents.map(async (file) => {
-            const command = new GetObjectCommand({
-              Bucket: bucketName,
-              Key: file.Key,
-            });
-            return getSignedUrl(client, command, { expiresIn: 3600 });
-          })
-        );
+        bucketName,
+        exportPathName,
+      );
 
-        return {
-          csvFile,
-        };
+      if (csvFile.length === 0) {
+        throw new Error('Unable to UNLOAD table, there are no files in S3 storage');
       }
 
-      throw new Error('Unable to UNLOAD table, there are no files in S3 storage');
+      return {
+        exportBucketCsvEscapeSymbol: this.config.exportBucketCsvEscapeSymbol,
+        csvFile,
+        types
+      };
     } finally {
       conn.removeAllListeners('notice');
-
-      await conn.release();
+      conn.release();
     }
+  }
+
+  public capabilities(): DriverCapabilities {
+    return {
+      incrementalSchemaLoading: true,
+    };
   }
 }

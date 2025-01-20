@@ -1,5 +1,4 @@
 import chokidar from 'chokidar';
-import { FSWatcher } from 'fs';
 
 import { internalExceptions } from '@cubejs-backend/shared';
 
@@ -7,7 +6,7 @@ import { CubeCloudClient, AuthObject } from './cloud';
 import { DeployController } from './deploy';
 
 export class LivePreviewWatcher {
-  private watcher: FSWatcher | null = null;
+  private watcher: chokidar.FSWatcher | null = null;
 
   private handleQueueTimeout: NodeJS.Timeout | null = null;
 
@@ -35,14 +34,17 @@ export class LivePreviewWatcher {
       };
 
       return this.auth;
-    } catch (e) {
+    } catch (e: any) {
       internalExceptions(e);
       throw new Error('Live-preview token is invalid');
     }
   }
 
   public startWatch(): void {
-    if (!this.auth) throw new Error('Auth isn\'t set');
+    if (!this.auth) {
+      throw new Error('Auth isn\'t set');
+    }
+
     if (!this.watcher) {
       this.log('Start with Cube Cloud');
       this.watcher = chokidar.watch(
@@ -84,7 +86,9 @@ export class LivePreviewWatcher {
     let result = {
       lastHashTarget: this.lastHash,
       uploading: this.uploading,
-      active: !!this.watcher,
+      active: Boolean(this.watcher),
+      deploymentId: '' as any,
+      url: '' as any,
     };
 
     if (auth) {
@@ -93,7 +97,9 @@ export class LivePreviewWatcher {
         ...(await this.cubeCloudClient.getStatusDevMode({
           auth,
           lastHash: this.lastHash
-        }))
+        })),
+        deploymentId: auth.deploymentId,
+        url: auth.url
       };
     }
 
@@ -118,7 +124,7 @@ export class LivePreviewWatcher {
         this.uploading = true;
         await this.deploy();
       }
-    } catch (e) {
+    } catch (e: any) {
       if (e.response && e.response.statusCode === 302) {
         this.auth = null;
         this.stopWatch('token expired or invalid, please re-run live-preview mode');

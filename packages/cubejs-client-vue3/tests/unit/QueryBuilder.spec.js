@@ -4,11 +4,11 @@ import flushPromises from 'flush-promises';
 
 import fetchMock, { meta, load } from './__mocks__/responses';
 import QueryBuilder from '../../src/QueryBuilder';
-import { createCubejsApi } from './utils';
+import { createCubeApi } from './utils';
 
 describe('QueryBuilder.vue', () => {
   it('renders meta information', async () => {
-    const cube = createCubejsApi();
+    const cube = createCubeApi();
     jest
       .spyOn(cube, 'request')
       .mockImplementation(fetchMock(meta))
@@ -16,7 +16,7 @@ describe('QueryBuilder.vue', () => {
 
     // const wrapper = shallowMount(QueryBuilder, {
     //   props: {
-    //     cubejsApi: cube,
+    //     cubeApi: cube,
     //     query: {},
     //   },
     //   slots: {
@@ -30,7 +30,7 @@ describe('QueryBuilder.vue', () => {
   });
 
   // it('renders meta information', async () => {
-  //   const cube = createCubejsApi();
+  //   const cube = createCubeApi();
   //   jest
   //     .spyOn(cube, 'request')
   //     .mockImplementation(fetchMock(load))
@@ -40,7 +40,7 @@ describe('QueryBuilder.vue', () => {
 
   //   shallowMount(QueryBuilder, {
   //     props: {
-  //       cubejsApi: cube,
+  //       cubeApi: cube,
   //       query: {
   //         measures: ['Orders.count'],
   //       },
@@ -59,7 +59,7 @@ describe('QueryBuilder.vue', () => {
 
   describe('Update background query members', () => {
     it('adds members', async () => {
-      const cube = createCubejsApi();
+      const cube = createCubeApi();
       jest
         .spyOn(cube, 'request')
         .mockImplementation(fetchMock(load))
@@ -67,7 +67,7 @@ describe('QueryBuilder.vue', () => {
 
       const wrapper = shallowMount(QueryBuilder, {
         props: {
-          cubejsApi: cube,
+          cubeApi: cube,
           query: {},
         },
       });
@@ -81,7 +81,7 @@ describe('QueryBuilder.vue', () => {
     });
 
     it('updates members', async () => {
-      const cube = createCubejsApi();
+      const cube = createCubeApi();
       jest
         .spyOn(cube, 'request')
         .mockImplementation(fetchMock(load))
@@ -89,7 +89,7 @@ describe('QueryBuilder.vue', () => {
 
       const wrapper = shallowMount(QueryBuilder, {
         props: {
-          cubejsApi: cube,
+          cubeApi: cube,
           query: {
             measures: ['Orders.count'],
           },
@@ -106,7 +106,7 @@ describe('QueryBuilder.vue', () => {
     });
 
     it('removes members', async () => {
-      const cube = createCubejsApi();
+      const cube = createCubeApi();
       jest
         .spyOn(cube, 'request')
         .mockImplementation(fetchMock(load))
@@ -114,7 +114,7 @@ describe('QueryBuilder.vue', () => {
 
       const wrapper = shallowMount(QueryBuilder, {
         props: {
-          cubejsApi: cube,
+          cubeApi: cube,
           query: {
             measures: ['Orders.count'],
           },
@@ -130,7 +130,7 @@ describe('QueryBuilder.vue', () => {
     });
 
     it('sets members', async () => {
-      const cube = createCubejsApi();
+      const cube = createCubeApi();
       jest
         .spyOn(cube, 'request')
         .mockImplementation(fetchMock(load))
@@ -138,7 +138,7 @@ describe('QueryBuilder.vue', () => {
 
       const wrapper = shallowMount(QueryBuilder, {
         props: {
-          cubejsApi: cube,
+          cubeApi: cube,
           query: {
             measures: ['Orders.count'],
           },
@@ -157,7 +157,7 @@ describe('QueryBuilder.vue', () => {
 
   describe('changes background query timeDimensions', () => {
     it('adds timeeDimensions', async () => {
-      const cube = createCubejsApi();
+      const cube = createCubeApi();
       jest
         .spyOn(cube, 'request')
         .mockImplementation(fetchMock(load))
@@ -165,7 +165,7 @@ describe('QueryBuilder.vue', () => {
 
       const wrapper = shallowMount(QueryBuilder, {
         props: {
-          cubejsApi: cube,
+          cubeApi: cube,
           query: {},
         },
       });
@@ -184,7 +184,7 @@ describe('QueryBuilder.vue', () => {
     });
 
     it('updates timeDimensions', async () => {
-      const cube = createCubejsApi();
+      const cube = createCubeApi();
       jest
         .spyOn(cube, 'request')
         .mockImplementation(fetchMock(load))
@@ -204,7 +204,7 @@ describe('QueryBuilder.vue', () => {
 
       const wrapper = shallowMount(QueryBuilder, {
         props: {
-          cubejsApi: cube,
+          cubeApi: cube,
           query: {
             timeDimensions: [dimension],
           },
@@ -223,7 +223,7 @@ describe('QueryBuilder.vue', () => {
     });
 
     it('removes timeDimensions', async () => {
-      const cube = createCubejsApi();
+      const cube = createCubeApi();
       jest
         .spyOn(cube, 'request')
         .mockImplementation(fetchMock(load))
@@ -237,7 +237,7 @@ describe('QueryBuilder.vue', () => {
 
       const wrapper = shallowMount(QueryBuilder, {
         props: {
-          cubejsApi: cube,
+          cubeApi: cube,
           query: {
             timeDimensions: [dimension],
           },
@@ -253,7 +253,7 @@ describe('QueryBuilder.vue', () => {
     });
 
     it('sets timeDimensions', async () => {
-      const cube = createCubejsApi();
+      const cube = createCubeApi();
       jest
         .spyOn(cube, 'request')
         .mockImplementation(fetchMock(load))
@@ -273,7 +273,7 @@ describe('QueryBuilder.vue', () => {
 
       const wrapper = shallowMount(QueryBuilder, {
         props: {
-          cubejsApi: cube,
+          cubeApi: cube,
           query: {
             timeDimensions: [dimension],
           },
@@ -294,7 +294,7 @@ describe('QueryBuilder.vue', () => {
 
   describe('update background query on filters', () => {
     it('adds filters', async () => {
-      const cube = createCubejsApi();
+      const cube = createCubeApi();
       jest
         .spyOn(cube, 'request')
         .mockImplementation(fetchMock(load))
@@ -302,7 +302,7 @@ describe('QueryBuilder.vue', () => {
 
       const wrapper = shallowMount(QueryBuilder, {
         props: {
-          cubejsApi: cube,
+          cubeApi: cube,
           query: {},
         },
       });
@@ -320,7 +320,7 @@ describe('QueryBuilder.vue', () => {
     });
 
     it('updates filters', async () => {
-      const cube = createCubejsApi();
+      const cube = createCubeApi();
       jest
         .spyOn(cube, 'request')
         .mockImplementation(fetchMock(load))
@@ -340,7 +340,7 @@ describe('QueryBuilder.vue', () => {
 
       const wrapper = shallowMount(QueryBuilder, {
         props: {
-          cubejsApi: cube,
+          cubeApi: cube,
           query: {
             filters: [filter],
           },
@@ -359,7 +359,7 @@ describe('QueryBuilder.vue', () => {
     });
 
     it('removes filters', async () => {
-      const cube = createCubejsApi();
+      const cube = createCubeApi();
       jest
         .spyOn(cube, 'request')
         .mockImplementation(fetchMock(load))
@@ -373,7 +373,7 @@ describe('QueryBuilder.vue', () => {
 
       const wrapper = shallowMount(QueryBuilder, {
         props: {
-          cubejsApi: cube,
+          cubeApi: cube,
           query: {
             filters: [filter],
           },
@@ -390,7 +390,7 @@ describe('QueryBuilder.vue', () => {
     });
 
     it('sets filters', async () => {
-      const cube = createCubejsApi();
+      const cube = createCubeApi();
       jest
         .spyOn(cube, 'request')
         .mockImplementation(fetchMock(load))
@@ -410,7 +410,7 @@ describe('QueryBuilder.vue', () => {
 
       const wrapper = shallowMount(QueryBuilder, {
         props: {
-          cubejsApi: cube,
+          cubeApi: cube,
           query: {
             filters: [filter],
           },
@@ -428,8 +428,242 @@ describe('QueryBuilder.vue', () => {
       expect(wrapper.vm.filters[0].values).toContain('valid');
     });
 
+    it('sets filters with boolean logical operators', async () => {
+      const cube = createCubeApi();
+      jest
+        .spyOn(cube, 'request')
+        .mockImplementation(fetchMock(load))
+        .mockImplementationOnce(fetchMock(meta));
+
+      const filter = {
+        and: [
+          {
+            dimension: 'Orders.status',
+            operator: 'equals',
+            values: ['this'],
+          },
+          {
+            dimension: 'Orders.status',
+            operator: 'equals',
+            values: ['that'],
+          },
+        ],
+        or: [
+          {
+            dimension: 'Orders.status',
+            operator: 'equals',
+            values: ['this'],
+          },
+          {
+            dimension: 'Orders.status',
+            operator: 'equals',
+            values: ['that'],
+          },
+          {
+            and: [
+              {
+                dimension: 'Orders.status',
+                operator: 'equals',
+                values: ['this'],
+              },
+              {
+                dimension: 'Orders.status',
+                operator: 'equals',
+                values: ['that'],
+              },
+            ],
+          },
+        ],
+      };
+
+      const wrapper = shallowMount(QueryBuilder, {
+        props: {
+          cubeApi: cube,
+          query: {
+            filters: [filter],
+          },
+        },
+      });
+
+      await flushPromises();
+      expect(wrapper.vm.filters[0].or.length).toBe(3);
+      expect(wrapper.vm.filters[0].and.length).toBe(2);
+      wrapper.vm.setMembers('filters', []);
+      expect(wrapper.vm.validatedQuery.filters).toBeUndefined();
+      wrapper.vm.setMembers('filters', [filter]);
+      expect(wrapper.vm.validatedQuery.filters.length).toBe(1);
+      expect(wrapper.vm.validatedQuery.filters[0].and[0].member).toBe('Orders.status');
+      expect(wrapper.vm.validatedQuery.filters[0].and[0].values).toContain('this');
+      expect(wrapper.vm.validatedQuery.filters[0].and[1].values).toContain('that');
+      expect(wrapper.vm.validatedQuery.filters[0].or[0].member).toBe('Orders.status');
+      expect(wrapper.vm.validatedQuery.filters[0].or[0].values).toContain('this');
+      expect(wrapper.vm.validatedQuery.filters[0].or[1].values).toContain('that');
+      expect(wrapper.vm.validatedQuery.filters[0].or[2].and[0].member).toBe('Orders.status');
+      expect(wrapper.vm.validatedQuery.filters[0].or[2].and[0].values).toContain('this');
+      expect(wrapper.vm.validatedQuery.filters[0].or[2].and[1].values).toContain('that');
+    });
+
+    it('filters with boolean logical operators without explicit set', async () => {
+      const cube = createCubeApi();
+      jest
+          .spyOn(cube, 'request')
+          .mockImplementation(fetchMock(load))
+          .mockImplementationOnce(fetchMock(meta));
+
+      const filter = {
+        or: [
+          {
+            dimension: 'Orders.status',
+            operator: 'equals',
+            values: ['this'],
+          },
+          {
+            dimension: 'Orders.status',
+            operator: 'equals',
+            values: ['that'],
+          },
+          {
+            and: [
+              {
+                dimension: 'Orders.status',
+                operator: 'equals',
+                values: ['this'],
+              },
+              {
+                dimension: 'Orders.status',
+                operator: 'equals',
+                values: ['that'],
+              },
+            ],
+          },
+        ],
+      };
+
+      const wrapper = shallowMount(QueryBuilder, {
+        props: {
+          cubeApi: cube,
+          query: {
+            filters: [filter],
+          },
+        },
+      });
+
+      await flushPromises();
+
+      expect(wrapper.vm.filters[0].or.length).toBe(3);
+      expect(wrapper.vm.validatedQuery.filters.length).toBe(1);
+      expect(wrapper.vm.validatedQuery.filters[0].or[0].member).toBe('Orders.status');
+      expect(wrapper.vm.validatedQuery.filters[0].or[0].values).toContain('this');
+      expect(wrapper.vm.validatedQuery.filters[0].or[1].values).toContain('that');
+      expect(wrapper.vm.validatedQuery.filters[0].or[2].and[0].member).toBe('Orders.status');
+      expect(wrapper.vm.validatedQuery.filters[0].or[2].and[0].values).toContain('this');
+      expect(wrapper.vm.validatedQuery.filters[0].or[2].and[1].values).toContain('that');
+    });
+
+    it.each([
+      [
+        {
+          and: [
+            {
+              dimension: 'Orders.status',
+              values: ['this'],
+            },
+          ],
+        },
+        0,
+      ],
+      [
+        {
+          or: [
+            {
+              dimension: 'Orders.status',
+              values: ['this'],
+            },
+          ],
+        },
+        0,
+      ],
+      [
+        {
+          or: [
+            {
+              dimension: 'Orders.status',
+              values: ['this'],
+            },
+            {
+              and: [
+                {
+                  dimension: 'Orders.status',
+                  values: ['this'],
+                },
+              ],
+            },
+          ],
+        },
+        0,
+      ],
+      [
+        {
+          and: [
+            {
+              dimension: 'Orders.status',
+              values: ['this'],
+            },
+          ],
+          or: [
+            {
+              dimension: 'Orders.status',
+              operator: 'equals',
+              values: ['this'],
+            },
+          ],
+        },
+        1,
+      ],
+      [
+        {
+          or: [
+            {
+              dimension: 'Orders.status',
+              values: ['this'],
+            },
+            {
+              and: [
+                {
+                  dimension: 'Orders.status',
+                  operator: 'equals',
+                  values: ['this'],
+                },
+              ],
+            },
+          ],
+        },
+        1,
+      ],
+    ])('does not assign boolean logical operators having no operator', async (filter, expected) => {
+      const cube = createCubeApi();
+      jest
+        .spyOn(cube, 'request')
+        .mockImplementation(fetchMock(load))
+        .mockImplementationOnce(fetchMock(meta));
+
+      const wrapper = shallowMount(QueryBuilder, {
+        props: {
+          cubeApi: cube,
+          query: {
+            filters: [],
+          },
+        },
+      });
+
+      await flushPromises();
+
+      wrapper.vm.setMembers('filters', [filter]);
+      expect(wrapper.vm.validatedQuery.filters.length).toBe(expected);
+    });
+
     it('sets filters when using measure', async () => {
-      const cube = createCubejsApi();
+      const cube = createCubeApi();
       jest
         .spyOn(cube, 'request')
         .mockImplementation(fetchMock(load))
@@ -443,7 +677,7 @@ describe('QueryBuilder.vue', () => {
 
       const wrapper = shallowMount(QueryBuilder, {
         props: {
-          cubejsApi: cube,
+          cubeApi: cube,
           query: {
             filters: [filter],
           },
@@ -458,7 +692,7 @@ describe('QueryBuilder.vue', () => {
     });
 
     it('sets limit', async () => {
-      const cube = createCubejsApi();
+      const cube = createCubeApi();
       jest
         .spyOn(cube, 'request')
         .mockImplementation(fetchMock(load))
@@ -472,7 +706,7 @@ describe('QueryBuilder.vue', () => {
 
       const wrapper = shallowMount(QueryBuilder, {
         props: {
-          cubejsApi: cube,
+          cubeApi: cube,
           query: {
             filters: [filter],
             limit: 10,
@@ -486,7 +720,7 @@ describe('QueryBuilder.vue', () => {
     });
 
     it('sets offset', async () => {
-      const cube = createCubejsApi();
+      const cube = createCubeApi();
       jest
         .spyOn(cube, 'request')
         .mockImplementation(fetchMock(load))
@@ -500,7 +734,7 @@ describe('QueryBuilder.vue', () => {
 
       const wrapper = shallowMount(QueryBuilder, {
         props: {
-          cubejsApi: cube,
+          cubeApi: cube,
           query: {
             filters: [filter],
             offset: 10,
@@ -514,7 +748,7 @@ describe('QueryBuilder.vue', () => {
     });
 
     it('sets renewQuery', async () => {
-      const cube = createCubejsApi();
+      const cube = createCubeApi();
       jest
         .spyOn(cube, 'request')
         .mockImplementation(fetchMock(load))
@@ -528,7 +762,7 @@ describe('QueryBuilder.vue', () => {
 
       const wrapper = shallowMount(QueryBuilder, {
         props: {
-          cubejsApi: cube,
+          cubeApi: cube,
           query: {
             filters: [filter],
             renewQuery: true,
@@ -542,7 +776,7 @@ describe('QueryBuilder.vue', () => {
     });
 
     it('ignore order if empty', async () => {
-      const cube = createCubejsApi();
+      const cube = createCubeApi();
       jest
         .spyOn(cube, 'request')
         .mockImplementation(fetchMock(load))
@@ -556,7 +790,7 @@ describe('QueryBuilder.vue', () => {
 
       const wrapper = shallowMount(QueryBuilder, {
         props: {
-          cubejsApi: cube,
+          cubeApi: cube,
           query: {
             filters: [filter],
           },
@@ -569,7 +803,7 @@ describe('QueryBuilder.vue', () => {
     });
 
     it('sets order', async () => {
-      const cube = createCubejsApi();
+      const cube = createCubeApi();
       jest
         .spyOn(cube, 'request')
         .mockImplementation(fetchMock(load))
@@ -583,7 +817,7 @@ describe('QueryBuilder.vue', () => {
 
       const wrapper = shallowMount(QueryBuilder, {
         props: {
-          cubejsApi: cube,
+          cubeApi: cube,
           query: {
             dimensions: ['Orders.status'],
             filters: [filter],
@@ -601,7 +835,7 @@ describe('QueryBuilder.vue', () => {
 
     // todo: fix later
     // it('is reactive when filter is changed', async () => {
-    //   const cube = createCubejsApi();
+    //   const cube = createCubeApi();
     //   jest
     //     .spyOn(cube, 'request')
     //     .mockImplementation(fetchMock(load))
@@ -620,8 +854,8 @@ describe('QueryBuilder.vue', () => {
     //   };
     //
     //   const wrapper = mount(QueryBuilder, {
-    //     propsData: {
-    //       cubejsApi: cube,
+    //     props: {
+    //       cubeApi: cube,
     //       query: {
     //         filters: [filter],
     //       },
@@ -646,5 +880,127 @@ describe('QueryBuilder.vue', () => {
     //   expect(wrapper.vm.filters[0].member.name).toBe('Orders.number');
     //   expect(wrapper.vm.filters[0].values).toContain('1');
     // });
+  });
+
+  describe('builder computed', () => {
+    describe('validatedQuery', () => {
+      it('correctly updates pivot config after chart type change', async () => {
+        const expectedPivotForTable = {
+          x: ['Orders.status'],
+          y: ['measures'],
+          fillMissingDates: true,
+          joinDateRange: false,
+        };
+
+        const expectedPivotForLine = {
+          x: ['Orders.createdAt.day'],
+          y: ['Orders.status', 'measures'],
+          fillMissingDates: true,
+          joinDateRange: false,
+        };
+
+        const cube = createCubeApi();
+        jest
+            .spyOn(cube, 'request')
+            .mockImplementation(fetchMock(load))
+            .mockImplementationOnce(fetchMock(meta));
+
+        const wrapper = shallowMount(QueryBuilder, {
+          propsData: {
+            cubeApi: cube,
+            query: {
+              measures: ['Orders.count'],
+              timeDimensions: [{
+                dimension: 'Orders.createdAt',
+              }],
+            },
+          },
+        });
+
+        await flushPromises();
+
+        wrapper.vm.addMember('dimensions', 'Orders.status'); // to trigger first heuristics
+        await wrapper.vm.$nextTick();
+        expect(wrapper.vm.pivotConfig).toEqual(expectedPivotForTable);
+        expect(wrapper.vm.chartType).toBe('table');
+        wrapper.vm.updateChart('line');
+        await wrapper.vm.$nextTick();
+        expect(wrapper.vm.pivotConfig).toEqual(expectedPivotForLine);
+        expect(wrapper.vm.chartType).toBe('line');
+      });
+    });
+    describe('orderMembers', () => {
+      it('does not contain time dimension if granularity is set to none', async () => {
+        const cube = createCubeApi();
+        jest
+            .spyOn(cube, 'request')
+            .mockImplementation(fetchMock(load))
+            .mockImplementationOnce(fetchMock(meta));
+
+        const wrapper = shallowMount(QueryBuilder, {
+          props: {
+            cubeApi: cube,
+            query: {
+              measures: ['Orders.count'],
+              timeDimensions: [{
+                dimension: 'Orders.createdAt',
+              }],
+            },
+          },
+        });
+
+        await flushPromises();
+
+        expect(wrapper.vm.orderMembers.length).toBe(1);
+        expect(wrapper.vm.orderMembers).toEqual(
+            expect.arrayContaining([
+              expect.objectContaining({
+                id: 'Orders.count',
+                title: 'Orders Count',
+                order: 'none',
+              }),
+            ])
+        );
+      });
+
+      it('contains time dimension if granularity is not none', async () => {
+        const cube = createCubeApi();
+        jest
+            .spyOn(cube, 'request')
+            .mockImplementation(fetchMock(load))
+            .mockImplementationOnce(fetchMock(meta));
+
+        const wrapper = shallowMount(QueryBuilder, {
+          props: {
+            cubeApi: cube,
+            query: {
+              measures: ['Orders.count'],
+              timeDimensions: [{
+                dimension: 'Orders.createdAt',
+                granularity: 'day',
+              }],
+            },
+          },
+        });
+
+        await flushPromises();
+
+        expect(wrapper.vm.orderMembers.length).toBe(2);
+        expect(wrapper.vm.orderMembers).toEqual(
+            expect.arrayContaining([
+              expect.objectContaining({
+                id: 'Orders.createdAt',
+                title: 'Orders Created at',
+                order: 'none'
+              }),
+              expect.objectContaining({
+                id: 'Orders.count',
+                title: 'Orders Count',
+                order: 'none',
+              })
+            ])
+        );
+      });
+    });
   });
 });

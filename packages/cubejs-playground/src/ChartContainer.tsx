@@ -1,29 +1,34 @@
-import { Component } from 'react';
 import {
   CodeOutlined,
   CodeSandboxOutlined,
   CopyOutlined,
   DownOutlined,
-  PlusOutlined,
   QuestionCircleOutlined,
-  SyncOutlined,
-  ThunderboltOutlined,
+  ThunderboltOutlined
 } from '@ant-design/icons';
-import { Dropdown, Menu, Modal } from 'antd';
+import { ChartType, Meta, Query, ResultSet } from '@cubejs-client/core';
+import { Dropdown, Menu } from 'antd';
 import { getParameters } from 'codesandbox-import-utils/lib/api/define';
-import styled from 'styled-components';
+import { Component, FunctionComponent, Suspense } from 'react';
 import { Redirect, RouteComponentProps, withRouter } from 'react-router-dom';
-import { QueryRenderer } from '@cubejs-client/react';
-import { Query, ResultSet } from '@cubejs-client/core';
-import { format } from 'sql-formatter';
+import styled from 'styled-components';
 
-import { SectionRow } from './components';
-import { Button, Card, FatalError } from './atoms';
 import PrismCode from './PrismCode';
-import CachePane from './components/CachePane';
+import { Button, Card, CubeLoader } from './atoms';
+import { SectionRow } from './components';
+import { FatalError } from './components/Error/FatalError';
 import { playgroundAction } from './events';
+import { loadable } from './loadable';
+import { GraphQLIcon } from './shared/icons/GraphQLIcon';
 import { codeSandboxDefinition, copyToClipboard } from './utils';
-import DashboardSource from './DashboardSource';
+
+const GraphiQLSandbox = loadable(
+  () => import('./components/GraphQL/GraphiQLSandbox')
+);
+
+const SqlQueryTab = loadable(() => import('./components/SqlQueryTab'));
+
+const CachePane = loadable(() => import('./components/CachePane'));
 
 const frameworkToTemplate = {
   react: 'create-react-app',
@@ -32,10 +37,12 @@ const frameworkToTemplate = {
 };
 
 const StyledCard: any = styled(Card)`
+  min-height: 420px;
+
   .ant-card-head {
     position: sticky;
     top: 0;
-    z-index: 100;
+    z-index: 1;
     background: white;
   }
 
@@ -46,52 +53,105 @@ const StyledCard: any = styled(Card)`
   }
 `;
 
+type UnsupportedPlaceholder = FunctionComponent<{ framework: string }>;
 type FrameworkDescriptor = {
   id: string;
   title: string;
   docsLink?: string;
-  supported?: boolean;
+  placeholder?: UnsupportedPlaceholder;
   scaffoldingSupported?: boolean;
 };
+
+const UnsupportedFrameworkPlaceholder: UnsupportedPlaceholder = ({
+  framework,
+}) => (
+  <h2 style={{ padding: 24, textAlign: 'center' }}>
+    We do not support&nbsp; Vanilla JavaScript &nbsp;code generation here yet.
+    <br />
+    Please refer to&nbsp;
+    <a
+      href="https://cube.dev/docs/@cubejs-client-core"
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={() =>
+        playgroundAction('Unsupported Framework Docs', { framework })
+      }
+    >
+      Vanilla JavaScript &nbsp;docs
+    </a>
+    &nbsp;to see on how to use it with Cube.
+  </h2>
+);
+
+const BIPlaceholder: UnsupportedPlaceholder = () => (
+  <h2 style={{ padding: 24, textAlign: 'center' }}>
+    You can connect Cube to any Business Intelligence tool through the Cube SQL
+    API.
+    <br />
+    Please refer to&nbsp;
+    <a
+      href="https://cube.dev/docs/backend/sql"
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={() => playgroundAction('BI Docs')}
+    >
+      Cube SQL &nbsp;docs
+    </a>
+    &nbsp;to learn more.
+  </h2>
+);
 
 export const frameworks: FrameworkDescriptor[] = [
   {
     id: 'react',
     title: 'React',
-    supported: true,
     scaffoldingSupported: true,
   },
   {
     id: 'angular',
     title: 'Angular',
-    supported: true,
     scaffoldingSupported: true,
   },
   {
     id: 'vue',
     title: 'Vue',
-    supported: true,
     scaffoldingSupported: true,
   },
   {
     id: 'vanilla',
     title: 'Vanilla JavaScript',
-    docsLink: 'https://cube.dev/docs/@cubejs-client-core',
+    placeholder: UnsupportedFrameworkPlaceholder,
+  },
+  {
+    id: 'bi',
+    title: 'BI',
+    placeholder: BIPlaceholder,
   },
 ];
 
 type ChartContainerProps = {
   query: Query;
+  meta: Meta;
   hideActions: boolean;
-  dashboardSource?: DashboardSource;
+  chartType: ChartType;
+  isGraphQLSupported: boolean;
   error?: Error;
   resultSet?: ResultSet;
   [k: string]: any;
 };
 
+type ChartContainerState = {
+  activeTab: string;
+  sql: {
+    loading: boolean;
+    value?: string;
+  };
+  [k: string]: any;
+};
+
 class ChartContainer extends Component<
   ChartContainerProps & RouteComponentProps,
-  any
+  ChartContainerState
 > {
   static defaultProps = {
     query: {},
@@ -104,7 +164,8 @@ class ChartContainer extends Component<
       props.iframeRef.current != null &&
       props.chartingLibrary
     ) {
-      const { __cubejsPlayground } = props.iframeRef.current.contentWindow;
+      const { __cubejsPlayground } =
+        props.iframeRef.current.contentWindow || {};
 
       if (!__cubejsPlayground) {
         return {
@@ -150,9 +211,12 @@ class ChartContainer extends Component<
   constructor(props) {
     super(props);
     this.state = {
-      showCode: false,
+      activeTab: 'chart',
       chartRendererError: null,
-    } as any;
+      sql: {
+        loading: false,
+      },
+    };
   }
 
   render() {
@@ -161,24 +225,24 @@ class ChartContainer extends Component<
       codesandboxFiles,
       dependencies,
       redirectToDashboard,
-      showCode,
+      activeTab,
       addingToDashboard,
       chartRendererError,
+      sql,
     } = this.state;
     const {
       isChartRendererReady,
       resultSet,
       error,
       render,
-      dashboardSource,
       hideActions,
       query,
       chartingLibrary,
       setChartLibrary,
       chartLibraries,
-      history,
       framework,
       setFramework,
+      meta,
       isFetchingMeta,
       onChartRendererReadyChange,
     } = this.props;
@@ -262,7 +326,7 @@ class ChartContainer extends Component<
             {chartLibrariesMenu ? (
               <Dropdown
                 overlay={chartLibrariesMenu}
-                disabled={!frameworkItem?.supported || isFetchingMeta}
+                disabled={!!frameworkItem?.placeholder || isFetchingMeta}
               >
                 <Button data-testid="charting-library-btn" size="small">
                   {currentLibraryItem?.title}
@@ -276,13 +340,11 @@ class ChartContainer extends Component<
             <Button
               data-testid="chart-btn"
               size="small"
-              type={!showCode ? 'primary' : 'default'}
-              disabled={!frameworkItem?.supported || isFetchingMeta}
+              type={activeTab === 'chart' ? 'primary' : 'default'}
+              disabled={!!frameworkItem?.placeholder || isFetchingMeta}
               onClick={() => {
                 playgroundAction('Show Chart');
-                this.setState({
-                  showCode: null,
-                });
+                this.setState({ activeTab: 'chart' });
               }}
             >
               Chart
@@ -290,14 +352,13 @@ class ChartContainer extends Component<
 
             <Button
               data-testid="json-query-btn"
-              icon={<ThunderboltOutlined />}
               size="small"
-              type={showCode === 'query' ? 'primary' : 'default'}
-              disabled={!frameworkItem?.supported || isFetchingMeta}
+              type={activeTab === 'query' ? 'primary' : 'default'}
+              disabled={!!frameworkItem?.placeholder || isFetchingMeta}
               onClick={() => {
                 playgroundAction('Show Query');
                 this.setState({
-                  showCode: 'query',
+                  activeTab: 'query',
                 });
               }}
             >
@@ -305,14 +366,28 @@ class ChartContainer extends Component<
             </Button>
 
             <Button
+              data-testid="graphiql-btn"
+              icon={<GraphQLIcon />}
+              size="small"
+              type={activeTab === 'graphiql' ? 'primary' : 'default'}
+              disabled={!!frameworkItem?.placeholder || isFetchingMeta}
+              onClick={() => {
+                playgroundAction('Show GraphiQL');
+                this.setState({ activeTab: 'graphiql' });
+              }}
+            >
+              GraphiQL
+            </Button>
+
+            <Button
               data-testid="code-btn"
               icon={<CodeOutlined />}
               size="small"
-              type={showCode === 'code' ? 'primary' : 'default'}
-              disabled={!frameworkItem?.supported || isFetchingMeta}
+              type={activeTab === 'code' ? 'primary' : 'default'}
+              disabled={!!frameworkItem?.placeholder || isFetchingMeta}
               onClick={() => {
                 playgroundAction('Show Code');
-                this.setState({ showCode: 'code' });
+                this.setState({ activeTab: 'code' });
               }}
             >
               Code
@@ -322,26 +397,26 @@ class ChartContainer extends Component<
               data-testid="sql-btn"
               icon={<QuestionCircleOutlined />}
               size="small"
-              type={showCode === 'sql' ? 'primary' : 'default'}
-              disabled={!frameworkItem?.supported || isFetchingMeta}
+              type={activeTab === 'generated-sql' ? 'primary' : 'default'}
+              disabled={!!frameworkItem?.placeholder || isFetchingMeta}
               onClick={() => {
                 playgroundAction('Show SQL');
-                this.setState({ showCode: 'sql' });
+                this.setState({ activeTab: 'generated-sql' });
               }}
             >
-              SQL
+              Generated SQL
             </Button>
 
             <Button
               data-testid="cache-btn"
-              icon={<SyncOutlined />}
+              icon={<ThunderboltOutlined />}
               size="small"
-              type={showCode === 'cache' ? 'primary' : 'default'}
-              disabled={!frameworkItem?.supported || isFetchingMeta}
+              type={activeTab === 'cache' ? 'primary' : 'default'}
+              disabled={!!frameworkItem?.placeholder || isFetchingMeta}
               onClick={() => {
                 playgroundAction('Show Cache');
                 this.setState({
-                  showCode: 'cache',
+                  activeTab: 'cache',
                 });
               }}
             >
@@ -354,56 +429,11 @@ class ChartContainer extends Component<
             icon={<CodeSandboxOutlined />}
             size="small"
             htmlType="submit"
-            disabled={!frameworkItem?.supported || isFetchingMeta}
+            disabled={!!frameworkItem?.placeholder || isFetchingMeta}
             onClick={() => playgroundAction('Open Code Sandbox')}
           >
             Edit
           </Button>
-
-          {dashboardSource && (
-            <Button
-              data-testid="add-to-dashboard-btn"
-              onClick={async () => {
-                this.setState({ addingToDashboard: true });
-                const canAddChart = await dashboardSource.canAddChart();
-                if (typeof canAddChart === 'boolean' && canAddChart) {
-                  playgroundAction('Add to Dashboard');
-                  await dashboardSource.addChart(codeExample);
-                  this.setState({
-                    redirectToDashboard: true,
-                    addingToDashboard: false,
-                  });
-                } else if (!canAddChart) {
-                  this.setState({ addingToDashboard: false });
-                  Modal.error({
-                    title:
-                      'Your dashboard app does not support adding of static charts',
-                    content: 'Please use static dashboard template',
-                  });
-                } else {
-                  this.setState({ addingToDashboard: false });
-                  Modal.error({
-                    title: 'There is an error loading your dashboard app',
-                    content: canAddChart,
-                    okText: 'Fix',
-                    okCancel: true,
-                    onOk() {
-                      history.push('/dashboard');
-                    },
-                  });
-                }
-              }}
-              icon={<PlusOutlined />}
-              size="small"
-              loading={addingToDashboard}
-              disabled={!frameworkItem?.supported || isFetchingMeta}
-              type="primary"
-            >
-              {addingToDashboard
-                ? 'Preparing dashboard app. It may take a while. Please check console for progress...'
-                : 'Add to Dashboard'}
-            </Button>
-          )}
         </SectionRow>
       </form>
     );
@@ -411,64 +441,78 @@ class ChartContainer extends Component<
     const queryText = JSON.stringify(query, null, 2);
 
     const renderChart = () => {
-      if (!frameworkItem?.supported) {
-        return (
-          <h2 style={{ padding: 24, textAlign: 'center' }}>
-            We do not support&nbsp;
-            {frameworkItem?.title}
-            &nbsp;code generation here yet.
-            <br />
-            Please refer to&nbsp;
-            <a
-              href={frameworkItem?.docsLink}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={() =>
-                playgroundAction('Unsupported Framework Docs', { framework })
-              }
-            >
-              {frameworkItem?.title}
-              &nbsp;docs
-            </a>
-            &nbsp;to see on how to use it with Cube.js.
-          </h2>
-        );
-      } else if (showCode === 'code') {
+      if (frameworkItem?.placeholder) {
+        const Placeholder = frameworkItem.placeholder;
+        return <Placeholder framework={framework} />;
+      } else if (activeTab === 'code') {
         if (error) {
           return <FatalError error={error} />;
         }
 
         return <PrismCode code={codeExample} />;
-      } else if (showCode === 'query') {
+      } else if (activeTab === 'query') {
         return <PrismCode code={queryText} />;
-      } else if (showCode === 'sql') {
+      } else if (activeTab === 'generated-sql') {
         return (
-          <QueryRenderer
-            loadSql="only"
-            query={query}
-            render={({ sqlQuery, error }) => {
-              if (error) {
-                return <FatalError error={error} />;
-              }
-
-              const [query] = Array.isArray(sqlQuery) ? sqlQuery : [sqlQuery];
-              // in the case of a compareDateRange query the SQL will be the same
-              return <PrismCode code={query && format(query.sql())} />;
-            }}
-          />
+          <Suspense
+            fallback={
+              <div style={{ height: 363 }}>
+                <CubeLoader />
+              </div>
+            }
+          >
+            <SqlQueryTab
+              query={query}
+              onChange={(sql) => {
+                this.setState({ sql });
+              }}
+            />
+          </Suspense>
         );
-      } else if (showCode === 'cache') {
-        return <CachePane query={query} />;
+      } else if (activeTab === 'cache') {
+        return (
+          <Suspense
+            fallback={
+              <div style={{ height: 363 }}>
+                <CubeLoader />
+              </div>
+            }
+          >
+            <CachePane query={query} />
+          </Suspense>
+        );
+      } else if (activeTab === 'graphiql' && meta) {
+        if (!this.props.isGraphQLSupported) {
+          return <div>GraphQL API is supported since version 0.29.0</div>;
+        }
+
+        return (
+          <Suspense
+            fallback={
+              <div style={{ height: 363 }}>
+                <CubeLoader />
+              </div>
+            }
+          >
+            <GraphiQLSandbox
+              apiUrl={this.props.apiUrl}
+              query={query}
+              meta={meta}
+            />
+          </Suspense>
+        );
       }
-      return render({ framework, error });
+
+      return null;
     };
 
     let title;
 
-    if (showCode === 'code') {
+    if (activeTab === 'code') {
       title = (
         <SectionRow style={{ alignItems: 'center' }}>
           <div>Code</div>
+
           <Button
             data-testid="copy-code-btn"
             icon={<CopyOutlined />}
@@ -484,10 +528,11 @@ class ChartContainer extends Component<
           </Button>
         </SectionRow>
       );
-    } else if (showCode === 'query') {
+    } else if (activeTab === 'query') {
       title = (
         <SectionRow>
           <div>Query</div>
+
           <Button
             data-testid="copy-cube-query-btn"
             icon={<CopyOutlined />}
@@ -502,10 +547,31 @@ class ChartContainer extends Component<
           </Button>
         </SectionRow>
       );
-    } else if (showCode === 'sql') {
-      title = 'SQL';
-    } else if (showCode === 'cache') {
+    } else if (activeTab === 'generated-sql') {
+      title = (
+        <SectionRow>
+          <div>SQL</div>
+
+          {!sql.loading && sql.value ? (
+            <Button
+              data-testid="copy-sql-btn"
+              icon={<CopyOutlined />}
+              size="small"
+              onClick={async () => {
+                await copyToClipboard(sql.value, 'The SQL has been copied');
+                playgroundAction('Copy SQL to Clipboard');
+              }}
+              type="primary"
+            >
+              Copy to Clipboard
+            </Button>
+          ) : null}
+        </SectionRow>
+      );
+    } else if (activeTab === 'cache') {
       title = 'Cache';
+    } else if (activeTab === 'graphiql') {
+      title = 'GraphQL API';
     } else {
       title = 'Chart';
     }
@@ -513,8 +579,13 @@ class ChartContainer extends Component<
     return hideActions ? (
       render({ resultSet, error })
     ) : (
-      <StyledCard title={title} style={{ minHeight: 420 }} extra={extra}>
+      <StyledCard title={title} extra={extra}>
         {renderChart()}
+        {activeTab === 'chart' ? (
+          render({ framework, error })
+        ) : (
+          <div style={{ display: 'none' }}>{render({ framework, error })}</div>
+        )}
       </StyledCard>
     );
   }

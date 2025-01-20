@@ -1,16 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useHistory } from 'react-router';
+import { useHistory } from 'react-router-dom';
+import { validateQuery } from '@cubejs-client/core';
 
-import { useSecurityContext } from '../../hooks';
 import { QueryBuilderContainer } from '../../components/PlaygroundQueryBuilder/QueryBuilderContainer';
-import { LivePreviewContextProvider } from '../../components/LivePreviewContext/LivePreviewContextProvider';
-import { useAppContext } from '../../components/AppContext';
-import DashboardSource from '../../DashboardSource';
-
-type LivePreviewContext = {
-  apiUrl: string;
-  token: string;
-};
+import {
+  useAppContext,
+  useDeepEffect,
+  useLivePreviewContext,
+  useSecurityContext,
+} from '../../hooks';
 
 export function buildApiUrl(
   apiUrl: string,
@@ -21,72 +18,49 @@ export function buildApiUrl(
 
 export function ExplorePage() {
   const { push } = useHistory();
+  const livePreviewContext = useLivePreviewContext();
 
-  const dashboardSource = useMemo(() => new DashboardSource(), []);
+  const { schemaVersion, setContext, playgroundContext } = useAppContext();
+  const { token: securityContextToken } = useSecurityContext();
 
-  const { playgroundContext } = useAppContext();
-  const { token } = useSecurityContext();
-  const [livePreviewContext, setLivePreviewContext] =
-    useState<LivePreviewContext | null>(null);
+  const { basePath, cubejsToken } = playgroundContext;
 
-  const [schemaVersion, updateSchemaVersion] = useState<number>(0);
-  const [apiUrl, setApiUrl] = useState<string>('');
-
-  useEffect(() => {
-    if (playgroundContext && livePreviewContext === null) {
-      setDefaultApiUrl();
-    }
-  }, [playgroundContext, livePreviewContext]);
-
-  function setDefaultApiUrl() {
-    setApiUrl(
-      buildApiUrl(
-        window.location.href.split('#')[0].replace(/\/$/, ''),
-        playgroundContext?.basePath
-      )
-    );
-  }
-
-  function handleChangeLivePreview({
-    token,
-    apiUrl,
-  }: {
-    token: string | null;
-    apiUrl: string | null;
-  }) {
-    if (token && apiUrl) {
-      setLivePreviewContext({
-        token,
-        apiUrl,
+  useDeepEffect(() => {
+    if (
+      basePath &&
+      (livePreviewContext === null ||
+        !livePreviewContext.statusLivePreview.active)
+    ) {
+      setContext({
+        token: securityContextToken || cubejsToken,
+        apiUrl: buildApiUrl(
+          window.location.href.split('#')[0].replace(/\/$/, ''),
+          basePath
+        ),
       });
-      setApiUrl(buildApiUrl(apiUrl, playgroundContext?.basePath));
-    } else {
-      setLivePreviewContext(null);
-      setDefaultApiUrl();
+    } else if (
+      livePreviewContext?.statusLivePreview.active &&
+      livePreviewContext.credentials
+    ) {
+      const { token, apiUrl } = livePreviewContext.credentials;
+      setContext({
+        apiUrl: buildApiUrl(apiUrl, basePath),
+        token,
+      });
     }
+  }, [basePath, livePreviewContext, cubejsToken, securityContextToken]);
 
-    updateSchemaVersion((value) => value + 1);
+  function setQueryParam({ query }: { query?: Object }) {
+    if (query) {
+      push({ search: `?query=${JSON.stringify(validateQuery(query))}` });
+    }
   }
-
-  const currentToken =
-    livePreviewContext?.token || token || playgroundContext?.cubejsToken;
 
   return (
-    <LivePreviewContextProvider
-      disabled={
-        playgroundContext?.livePreview == null || !playgroundContext.livePreview
-      }
-      onChange={handleChangeLivePreview}
-    >
-      <QueryBuilderContainer
-        apiUrl={apiUrl}
-        token={currentToken}
-        schemaVersion={schemaVersion}
-        dashboardSource={dashboardSource}
-        onVizStateChanged={({ query }) =>
-          push(`/build?query=${JSON.stringify(query)}`)
-        }
-      />
-    </LivePreviewContextProvider>
+    <QueryBuilderContainer
+      schemaVersion={schemaVersion}
+      onQueryChange={setQueryParam}
+      onTabChange={setQueryParam}
+    />
   );
 }

@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { AvailableCube } from '@cubejs-client/react';
-import { ButtonProps, Input, Menu as AntdMenu } from 'antd';
+import { ButtonProps, Input, Menu as AntdMenu, Tag } from 'antd';
 import styled from 'styled-components';
 import FlexSearch from 'flexsearch';
-import { TCubeMember } from '@cubejs-client/core';
+import { LockOutlined } from '@ant-design/icons';
+import { CubeMember, BaseCubeMember } from '@cubejs-client/core';
 
-import ButtonDropdown from './ButtonDropdown';
-import useDeepMemo from '../hooks/deep-memo';
+import { ButtonDropdown } from './ButtonDropdown';
+import { useDeepMemo } from '../hooks';
+import { getNameMemberPairs } from '../shared/members';
 
 const Menu = styled(AntdMenu)`
   max-height: 320px;
@@ -18,13 +20,18 @@ const Menu = styled(AntdMenu)`
   }
 `;
 
-const SearchMenuItem = styled(Menu.Item)`
-  position: sticky;
-  top: 0;
-  background: white;
-  padding-top: 10px;
-  padding-bottom: 0;
-  margin-bottom: 16px;
+const SearchMenuItem = styled.li`
+  position: sticky !important;
+  top: 0  !important;
+  // this isn't the best solution ever, but according to the situation other solutions are worse
+  // antd uses double class pattern (.disabled.active.active) to override the value of background color. actually the
+  // easiest way to override it is to use smtn with higher specificity
+  background: white !important;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+  cursor: default;
+  z-index: 9;
 
   ::after {
     display: block;
@@ -38,23 +45,14 @@ const SearchMenuItem = styled(Menu.Item)`
       to bottom,
       rgba(255, 255, 255, 1),
       rgba(255, 255, 255, 0)
-    );
+    ) !important;
   }
 `;
 
-function getNameMemberPairs(members) {
-  const items: [string, TCubeMember][] = [];
-
-  members.forEach((cube) =>
-    cube.members.forEach((member) => {
-      items.push([member.name, member]);
-    })
-  );
-
-  return items;
-}
-
-function filterMembersByKeys(members: AvailableCube[], keys: string[]) {
+function filterMembersByKeys(
+  members: AvailableCube<CubeMember>[],
+  keys: string[]
+) {
   const cubeNames = keys.map((key) => key.split('.')[0]);
 
   return members
@@ -68,40 +66,43 @@ function filterMembersByKeys(members: AvailableCube[], keys: string[]) {
 }
 
 type MemberDropdownProps = {
-  availableMembers: AvailableCube[];
-  onClick: (member: TCubeMember) => void;
+  availableCubes: AvailableCube<CubeMember>[];
+  showNoMembersPlaceholder?: boolean;
+  onClick: (member: BaseCubeMember) => void;
 } & ButtonProps;
 
 export default function MemberMenu({
-  availableMembers,
+  availableCubes,
+  showNoMembersPlaceholder = true,
   onClick,
   ...buttonProps
 }: MemberDropdownProps) {
-  const flexSearch = useRef(FlexSearch.create<string>({ encode: 'advanced' }));
+  const searchInputRef = useRef<Input | null>(null);
+  const index = useRef(new FlexSearch.Index({ tokenize: 'forward' })).current;
   const [search, setSearch] = useState<string>('');
   const [filteredKeys, setFilteredKeys] = useState<string[]>([]);
 
-  const index = flexSearch.current;
-  const hasMembers = availableMembers.some((cube) => cube.members.length > 0);
+  const hasMembers = availableCubes.some((cube) => cube.members.length > 0);
 
   const indexedMembers = useDeepMemo(() => {
-    getNameMemberPairs(availableMembers).forEach(([name, { title }]) =>
+    getNameMemberPairs(availableCubes).forEach(([name, { title }]) =>
       index.add(name as any, title)
     );
 
-    return Object.fromEntries(getNameMemberPairs(availableMembers));
-  }, [availableMembers]);
+    return Object.fromEntries(getNameMemberPairs(availableCubes));
+  }, [availableCubes]);
 
   useEffect(() => {
     let currentSearch = search;
 
     (async () => {
       const results = await index.search(search);
+
       if (currentSearch !== search) {
         return;
       }
 
-      setFilteredKeys(results);
+      setFilteredKeys(results as string[]);
     })();
 
     return () => {
@@ -109,59 +110,145 @@ export default function MemberMenu({
     };
   }, [index, search]);
 
+  const [show, setShow] = useState(false);
+
   const members = search
-    ? filterMembersByKeys(availableMembers, filteredKeys)
-    : availableMembers;
+    ? filterMembersByKeys(availableCubes, filteredKeys)
+    : availableCubes;
 
   return (
     <ButtonDropdown
+      show={show}
       {...buttonProps}
+      overlayStyles={{
+        minWidth: 280
+      }}
+      onOverlayClose={() => {
+        setShow(false);
+        setFilteredKeys([]);
+        setSearch('');
+        searchInputRef.current?.setValue('');
+      }}
+      onOverlayOpen={() => setShow(true)}
+      onClick={() => {
+        // we need to delay focusing since React needs to render <Menu /> first :)
+        setTimeout(() => {
+          searchInputRef.current?.focus({ preventScroll: true });
+        });
+      }}
       overlay={
-        <Menu
-          onClick={(event) => {
-            setSearch('');
-            setFilteredKeys([]);
-            onClick(indexedMembers[event.key]);
-          }}
-        >
-          {hasMembers ? (
-            <>
-              <SearchMenuItem disabled>
-                <Input
-                  placeholder="Search"
-                  autoFocus
-                  value={search}
-                  allowClear
-                  onKeyDown={(event) => {
-                    if (['ArrowDown', 'ArrowUp'].includes(event.key)) {
-                      event.preventDefault();
-                    }
-                  }}
-                  onChange={(event) => {
-                    setSearch(event.target.value);
-                  }}
-                />
-              </SearchMenuItem>
+        <div className="test">
+          <Menu
+            className="ant-dropdown-menu ant-dropdown-menu-root"
+            onKeyDown={(e) => {
+              if (
+                [
+                  'ArrowDown',
+                  'ArrowUp',
+                  'ArrowLeft',
+                  'ArrowRight',
+                  'Enter',
+                  'Escape',
+                  'Tab',
+                  'CapsLock',
+                ].includes(e.key)
+              ) {
+                return;
+              }
 
-              {members.map((cube) =>
-                cube.members.length > 0 ? (
-                  <Menu.ItemGroup key={cube.cubeName} title={cube.cubeTitle}>
-                    {cube.members.map((m) => (
-                      <Menu.Item
-                        key={m.name}
-                        data-testid={m.name}
-                      >
-                        {m.shortTitle}
-                      </Menu.Item>
-                    ))}
-                  </Menu.ItemGroup>
-                ) : null
-              )}
-            </>
-          ) : (
-            <Menu.Item disabled>No members found</Menu.Item>
-          )}
-        </Menu>
+              if (document.activeElement === searchInputRef.current?.input)
+                return;
+
+              searchInputRef.current?.focus({ preventScroll: true });
+            }}
+            onClick={(event) => {
+              if (['__not-found__', '__search_field__'].includes(event.key)) {
+                return;
+              }
+
+              setSearch('');
+              setFilteredKeys([]);
+              onClick(indexedMembers[event.key]);
+              searchInputRef.current?.setValue('');
+              setShow(false);
+            }}
+          >
+            {hasMembers ? (
+              <>
+                <SearchMenuItem id="hhhh" className="ant-menu-item ant-menu-item-active ant-menu-item-disabled ant-menu-item-only-child">
+                  <Input
+                    ref={searchInputRef}
+                    placeholder="Search"
+                    autoFocus
+                    allowClear
+                    onKeyDown={(event) => {
+                      if (
+                        ['ArrowDown', 'ArrowUp', 'Enter'].includes(event.key)
+                      ) {
+                        event.preventDefault();
+                      }
+
+                      if (['ArrowLeft', 'ArrowRight'].includes(event.key)) {
+                        event.stopPropagation();
+                      }
+                    }}
+                    onChange={(event) => {
+                      setSearch(event.target.value);
+                    }}
+                  />
+                </SearchMenuItem>
+
+                {members.map((cube) => {
+                  if (!cube.members.length) {
+                    return null;
+                  }
+
+                  return (
+                    <Menu.ItemGroup
+                      key={cube.cubeName}
+                      title={
+                        cube.type ? (
+                          <span>
+                            {cube.cubeTitle}{' '}
+                            {cube.public === false ? <LockOutlined /> : null}{' '}
+                            <Tag
+                              color={
+                                cube.type === 'view' ? '#D26E0B' : '#7A77FF'
+                              }
+                              style={{
+                                padding: '0 4px',
+                                lineHeight: 1.5,
+                              }}
+                            >
+                              {cube.type}
+                            </Tag>
+                          </span>
+                        ) : (
+                          cube.cubeTitle
+                        )
+                      }
+                    >
+                      {cube.members.map((m) => (
+                        <Menu.Item
+                          key={m.name}
+                          data-testid={m.name}
+                          className="ant-dropdown-menu-item"
+                        >
+                          {m.shortTitle}{' '}
+                          {m.isVisible === false ? <LockOutlined /> : null}
+                        </Menu.Item>
+                      ))}
+                    </Menu.ItemGroup>
+                  );
+                })}
+              </>
+            ) : showNoMembersPlaceholder ? (
+              <Menu.Item key="__not-found__" disabled>
+                No members found
+              </Menu.Item>
+            ) : null}
+          </Menu>
+        </div>
       }
     />
   );

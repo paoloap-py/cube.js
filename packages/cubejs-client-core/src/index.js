@@ -1,4 +1,4 @@
-import { v4 as uuid } from 'uuid';
+import { v4 as uuidv4 } from 'uuid';
 import ResultSet from './ResultSet';
 import SqlQuery from './SqlQuery';
 import Meta from './Meta';
@@ -10,13 +10,29 @@ let mutexCounter = 0;
 
 const MUTEX_ERROR = 'Mutex has been changed';
 
-const mutexPromise = (promise) => new Promise((resolve, reject) => {
-  promise.then(r => resolve(r), e => e !== MUTEX_ERROR && reject(e));
-});
+/**
+ * Query result dataset formats enum.
+ */
+const ResultType = {
+  DEFAULT: 'default',
+  COMPACT: 'compact'
+};
 
-class CubejsApi {
+function mutexPromise(promise) {
+  return new Promise(async (resolve, reject) => {
+    try {
+      resolve(await promise);
+    } catch (error) {
+      if (error !== MUTEX_ERROR) {
+        reject(error);
+      }
+    }
+  });
+}
+
+class CubeApi {
   constructor(apiToken, options) {
-    if (typeof apiToken === 'object') {
+    if (apiToken !== null && !Array.isArray(apiToken) && typeof apiToken === 'object') {
       options = apiToken;
       apiToken = undefined;
     }
@@ -40,10 +56,16 @@ class CubejsApi {
     });
     this.pollInterval = options.pollInterval || 5;
     this.parseDateMeasures = options.parseDateMeasures;
+    this.castNumerics = typeof options.castNumerics === 'boolean' ? options.castNumerics : false;
+
+    this.updateAuthorizationPromise = null;
   }
 
   request(method, params) {
-    return this.transport.request(method, { baseRequestId: uuid(), ...params });
+    return this.transport.request(method, {
+      baseRequestId: uuidv4(),
+      ...params
+    });
   }
 
   loadMethod(request, toResult, options, callback) {
@@ -60,14 +82,20 @@ class CubejsApi {
       options.mutexObj[mutexKey] = mutexValue;
     }
 
-    const requestPromise = this.updateTransportAuthorization().then(() => request());
+    const requestPromise = this
+      .updateTransportAuthorization()
+      .then(() => request());
 
+    let skipAuthorizationUpdate = true;
     let unsubscribed = false;
 
     const checkMutex = async () => {
       const requestInstance = await requestPromise;
 
-      if (options.mutexObj && options.mutexObj[mutexKey] !== mutexValue) {
+      if (
+        options.mutexObj &&
+        options.mutexObj[mutexKey] !== mutexValue
+      ) {
         unsubscribed = true;
         if (requestInstance.unsubscribe) {
           await requestInstance.unsubscribe();
@@ -101,7 +129,11 @@ class CubejsApi {
         return null;
       };
 
-      await this.updateTransportAuthorization();
+      if (options.subscribe && !skipAuthorizationUpdate) {
+        await this.updateTransportAuthorization();
+      }
+
+      skipAuthorizationUpdate = false;
 
       if (response.status === 502) {
         await checkMutex();
@@ -109,11 +141,12 @@ class CubejsApi {
       }
 
       let body = {};
-
+      let text = '';
       try {
-        body = await response.clone().json();
+        text = await response.text();
+        body = JSON.parse(text);
       } catch (_) {
-        body.error = await response.text();
+        body.error = text;
       }
 
       if (body.error === 'Continue wait') {
@@ -130,7 +163,7 @@ class CubejsApi {
           await requestInstance.unsubscribe();
         }
 
-        const error = new RequestError(body.error, body); // TODO error class
+        const error = new RequestError(body.error, body, response.status); // TODO error class
         if (callback) {
           callback(error);
         } else {
@@ -173,22 +206,152 @@ class CubejsApi {
   }
 
   async updateTransportAuthorization() {
+    if (this.updateAuthorizationPromise) {
+      await this.updateAuthorizationPromise;
+      return;
+    }
+
     if (typeof this.apiToken === 'function') {
-      const token = await this.apiToken();
-      if (this.transport.authorization !== token) {
-        this.transport.authorization = token;
-      }
+      this.updateAuthorizationPromise = new Promise(async (resolve, reject) => {
+        try {
+          const token = await this.apiToken();
+          if (this.transport.authorization !== token) {
+            this.transport.authorization = token;
+          }
+          resolve();
+        } catch (error) {
+          reject(error);
+        } finally {
+          this.updateAuthorizationPromise = null;
+        }
+      });
+
+      await this.updateAuthorizationPromise;
     }
   }
 
-  load(query, options, callback) {
+  /**
+   * Add system properties to a query object.
+   * @param {Query} query
+   * @param {string} responseFormat
+   * @returns {void}
+   * @private
+   */
+  patchQueryInternal(query, responseFormat) {
+    if (
+      responseFormat === ResultType.COMPACT &&
+      query.responseFormat !== ResultType.COMPACT
+    ) {
+      return {
+        ...query,
+        responseFormat: ResultType.COMPACT,
+      };
+    } else {
+      return query;
+    }
+  }
+
+  /**
+   * Process result fetched from the gateway#load method according
+   * to the network protocol.
+   * @param {*} response
+   * @returns ResultSet
+   * @private
+   */
+  loadResponseInternal(response, options = {}) {
+    if (
+      response.results.length
+    ) {
+      if (options.castNumerics) {
+        response.results.forEach((result) => {
+          const numericMembers = Object.entries({
+            ...result.annotation.measures,
+            ...result.annotation.dimensions,
+          }).map(([k, v]) => {
+            if (v.type === 'number') {
+              return k;
+            }
+
+            return undefined;
+          }).filter(Boolean);
+
+          result.data = result.data.map((row) => {
+            numericMembers.forEach((key) => {
+              if (row[key] != null) {
+                row[key] = Number(row[key]);
+              }
+            });
+
+            return row;
+          });
+        });
+      }
+
+      if (response.results[0].query.responseFormat &&
+        response.results[0].query.responseFormat === ResultType.COMPACT) {
+        response.results.forEach((result, j) => {
+          const data = [];
+          result.data.dataset.forEach((r) => {
+            const row = {};
+            result.data.members.forEach((m, i) => {
+              row[m] = r[i];
+            });
+            data.push(row);
+          });
+          response.results[j].data = data;
+        });
+      }
+    }
+
+    return new ResultSet(response, {
+      parseDateMeasures: this.parseDateMeasures
+    });
+  }
+
+  load(query, options, callback, responseFormat = ResultType.DEFAULT) {
+    options = {
+      castNumerics: this.castNumerics,
+      ...options
+    };
+
+    if (responseFormat === ResultType.COMPACT) {
+      if (Array.isArray(query)) {
+        query = query.map((q) => this.patchQueryInternal(q, ResultType.COMPACT));
+      } else {
+        query = this.patchQueryInternal(query, ResultType.COMPACT);
+      }
+    }
     return this.loadMethod(
       () => this.request('load', {
         query,
-        queryType: 'multi'
+        queryType: 'multi',
       }),
-      (response) => new ResultSet(response, { parseDateMeasures: this.parseDateMeasures }),
+      (response) => this.loadResponseInternal(response, options),
       options,
+      callback
+    );
+  }
+
+  subscribe(query, options, callback, responseFormat = ResultType.DEFAULT) {
+    options = {
+      castNumerics: this.castNumerics,
+      ...options
+    };
+
+    if (responseFormat === ResultType.COMPACT) {
+      if (Array.isArray(query)) {
+        query = query.map((q) => this.patchQueryInternal(q, ResultType.COMPACT));
+      } else {
+        query = this.patchQueryInternal(query, ResultType.COMPACT);
+      }
+    }
+    return this.loadMethod(
+      () => this.request('subscribe', {
+        query,
+        queryType: 'multi',
+      }),
+      (response) => this.loadResponseInternal(response, options),
+      { ...options, subscribe: true },
       callback
     );
   }
@@ -219,32 +382,10 @@ class CubejsApi {
       callback
     );
   }
-
-  subscribe(query, options, callback) {
-    return this.loadMethod(
-      () => this.request('subscribe', {
-        query,
-        queryType: 'multi'
-      }),
-      (body) => new ResultSet(body, { parseDateMeasures: this.parseDateMeasures }),
-      { ...options, subscribe: true },
-      callback
-    );
-  }
 }
 
-export default (apiToken, options) => new CubejsApi(apiToken, options);
+export default (apiToken, options) => new CubeApi(apiToken, options);
 
-export { CubejsApi, HttpTransport, ResultSet };
-export {
-  areQueriesEqual,
-  defaultHeuristics,
-  movePivotItem,
-  isQueryPresent,
-  moveItemInArray,
-  defaultOrder,
-  flattenFilters,
-  getQueryMembers,
-  getOrderMembersFromOrder,
-  GRANULARITIES
-} from './utils';
+export { CubeApi, HttpTransport, ResultSet, RequestError, Meta };
+export * from './utils';
+export * from './time';

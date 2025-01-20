@@ -1,14 +1,11 @@
 <p align="center"><a href="https://cube.dev"><img src="https://i.imgur.com/zYHXm4o.png" alt="Cube.js" width="300px"></a></p>
 
 [Website](https://cube.dev) • [Docs](https://cube.dev/docs) •
-[Blog](https://cube.dev/blog) • [Slack](https://slack.cube.dev) •
-[Twitter](https://twitter.com/thecubejs)
+[Blog](https://cube.dev/blog) • [Slack](https://slack.cube.dev) • [Twitter](https://twitter.com/the_cube_dev)
 
 # Supported tags and respective `Dockerfile` links
 
 Debian based: `<version>`, `latest`, `dev`
-
-Alpine based: `alpine`, `<version>-alpine`
 
 # Quick reference
 
@@ -83,12 +80,8 @@ services:
     ports:
       # It's better to use random port binding for 4000/3000 ports
       # without it you will not able to start multiple projects inside docker
-      # - 4000
-      # - 3000
-      # 4000 is a port for Cube.js API
-      - 4000:4000
-      # 3000 is a port for Playground web-server
-      - 3000:3000
+      - 4000:4000  # Cube.js API and Developer Playground
+      - 3000:3000  # Dashboard app, if created
     env_file: .env
     volumes:
       # If you are going to use own dependencies, for example axios/vault or anything else for getting configuration

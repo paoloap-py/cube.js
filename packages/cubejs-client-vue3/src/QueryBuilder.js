@@ -24,6 +24,50 @@ const toOrderMember = (member) => ({
 const reduceOrderMembers = (array) =>
   array.reduce((acc, { id, order }) => (order !== 'none' ? [...acc, [id, order]] : acc), []);
 
+const operators = [ 'and', 'or' ]
+
+const validateFilters = (filters) =>
+  filters.reduce((acc, raw) => {
+    if (raw.operator) {
+      return [...acc, raw];
+    }
+
+    const validBooleanFilter = operators.reduce((acc, operator) => {
+      const filters = raw[operator];
+
+      const booleanFilters = validateFilters(filters || []);
+
+      if (booleanFilters.length) {
+        return { ...acc, [operator]: booleanFilters };
+      }
+
+      return acc;
+    }, {});
+
+    if (operators.some((operator) => validBooleanFilter[operator])) {
+      return [...acc, validBooleanFilter];
+    }
+
+    return acc;
+  }, []);
+
+const getDimensionOrMeasure = (meta, m) => {
+  const memberName = m.member || m.dimension;
+  return memberName && meta.resolveMember(memberName, ['dimensions', 'measures']);
+};
+
+const resolveMembers = (meta, arr) =>
+  arr &&
+  arr.map((e, index) => {
+    return {
+      ...e,
+      member: getDimensionOrMeasure(meta, e),
+      index,
+      and: resolveMembers(meta, e.and),
+      or: resolveMembers(meta, e.or),
+    };
+  });
+
 export default {
   components: {
     QueryRenderer,
@@ -33,7 +77,7 @@ export default {
       type: Object,
       default: () => ({}),
     },
-    cubejsApi: {
+    cubeApi: {
       type: Object,
       required: true,
     },
@@ -87,7 +131,7 @@ export default {
   render() {
     const {
       chartType,
-      cubejsApi,
+      cubeApi,
       dimensions,
       filters,
       measures,
@@ -140,7 +184,6 @@ export default {
         order,
         orderMembers,
         setOrder: this.setOrder,
-        setQuery: this.setQuery,
         pivotConfig: this.pivotConfig,
         updateOrder: {
           set: (memberId, newOrder) => {
@@ -204,7 +247,7 @@ export default {
       QueryRenderer,
       {
         query: this.validatedQuery,
-        cubejsApi,
+        cubeApi,
         builderProps,
         slots: this.$slots,
         on: {
@@ -227,7 +270,12 @@ export default {
         [
           ...this.measures,
           ...this.dimensions,
-          ...this.timeDimensions.map(({ dimension }) => toOrderMember(dimension)),
+          ...this.timeDimensions.reduce((acc, { dimension, granularity }) => {
+            if (granularity !== undefined) {
+              acc.push(toOrderMember(dimension));
+            }
+            return acc;
+          }, []),
         ]
           .map((member, index) => {
             const id = member.name || member.id;
@@ -268,9 +316,11 @@ export default {
           });
         } else if (element === 'filters') {
           toQuery = (member) => ({
-            member: member.member.name,
+            member: member.member && member.member.name,
             operator: member.operator,
             values: member.values,
+            and: member.and && member.and.map(toQuery),
+            or: member.or && member.or.map(toQuery),
           });
         }
 
@@ -282,7 +332,7 @@ export default {
       });
 
       if (validatedQuery.filters) {
-        validatedQuery.filters = validatedQuery.filters.filter((f) => f.operator);
+        validatedQuery.filters = validateFilters(validatedQuery.filters)
       }
 
       // only set limit and offset if there are elements otherwise an invalid request with just limit/offset
@@ -333,7 +383,7 @@ export default {
         this.chartType = chartType || this.chartType;
         this.pivotConfig = ResultSet.getNormalizedPivotConfig(
           validatedQuery,
-          pivotConfig || this.pivotConfig
+          pivotConfig !== undefined ? pivotConfig : this.pivotConfig
         );
         this.copyQueryFromProps(validatedQuery);
       }
@@ -349,12 +399,12 @@ export default {
   },
 
   async mounted() {
-    this.meta = await this.cubejsApi.meta();
+    this.meta = await this.cubeApi.meta();
 
     this.copyQueryFromProps();
 
     if (isQueryPresent(this.initialQuery)) {
-      const dryRunResponse = await this.cubejsApi.dryRun(this.initialQuery);
+      const dryRunResponse = await this.cubeApi.dryRun(this.initialQuery);
       this.pivotConfig = ResultSet.getNormalizedPivotConfig(
         dryRunResponse?.pivotQuery || {},
         this.pivotConfig
@@ -396,15 +446,19 @@ export default {
         },
         index,
       }));
-      this.filters = filters.map((m, index) => ({
-        ...m,
-        member: this.meta.resolveMember(m.member || m.dimension, ['dimensions', 'measures']),
-        operators: this.meta.filterOperatorsForMember(m.member || m.dimension, [
-          'dimensions',
-          'measures',
-        ]),
-        index,
-      }));
+
+      const memberTypes = ['dimensions', 'measures'];
+      this.filters = filters.map((m, index) => {
+        const memberName = m.member || m.dimension;
+        return {
+          ...m,
+          member: memberName && this.meta.resolveMember(memberName, memberTypes),
+          operators: memberName && this.meta.filterOperatorsForMember(memberName, memberTypes),
+          and: resolveMembers(this.meta, m.and),
+          or: resolveMembers(this.meta, m.or),
+          index,
+        };
+      });
 
       this.availableMeasures = this.meta.membersForQuery({}, 'measures') || [];
       this.availableDimensions = this.meta.membersForQuery({}, 'dimensions') || [];
@@ -438,14 +492,12 @@ export default {
           };
         }
       } else if (element === 'filters') {
-        const filterMember = {
-          ...this.meta.resolveMember(member.member || member.dimension, ['dimensions', 'measures']),
-        };
-
         mem = {
           ...member,
-          member: filterMember,
-        };
+          and: resolveMembers(this.meta, member.and),
+          or: resolveMembers(this.meta, member.or),
+          member: getDimensionOrMeasure(this.meta, member),
+        }
       } else {
         mem = this[`available${name}`].find((m) => m.name === member);
       }
@@ -495,13 +547,11 @@ export default {
         }
       } else if (element === 'filters') {
         index = this[element].findIndex((x) => x.dimension === old);
-        const filterMember = {
-          ...this.meta.resolveMember(member.member || member.dimension, ['dimensions', 'measures']),
-        };
-
         mem = {
           ...member,
-          member: filterMember,
+          and: resolveMembers(this.meta, member.and),
+          or: resolveMembers(this.meta, member.or),
+          member: getDimensionOrMeasure(this.meta, member),
         };
       } else {
         index = this[element].findIndex((x) => x.name === old);
@@ -535,13 +585,11 @@ export default {
             };
           }
         } else if (element === 'filters') {
-          const member = {
-            ...this.meta.resolveMember(m.member || m.dimension, ['dimensions', 'measures']),
-          };
-
           mem = {
             ...m,
-            member,
+            and: resolveMembers(this.meta, m.and),
+            or: resolveMembers(this.meta, m.or),
+            member: getDimensionOrMeasure(this.meta, m),
           };
         } else {
           mem = this[`available${name}`].find((x) => x.name === m);
@@ -562,6 +610,9 @@ export default {
     },
     setOffset(offset) {
       this.offset = offset;
+    },
+    removeOffset() {
+      this.offset = null;
     },
     updateChart(chartType) {
       this.chartType = chartType;
@@ -593,7 +644,7 @@ export default {
         }
 
         if (isQueryPresent(query) && hasQueryChanged) {
-          this.cubejsApi
+          this.cubeApi
             .dryRun(query, {
               mutexObj: this.mutex,
             })

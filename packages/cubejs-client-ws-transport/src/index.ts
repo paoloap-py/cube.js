@@ -91,6 +91,9 @@ class WebSocketTransport implements ITransport<WebSocketTransportResult> {
 
   public async close(): Promise<void> {
     if (this.ws) {
+      // Flush send queue before sending close frame
+      this.ws.sendQueue();
+
       this.ws.close();
     }
   }
@@ -209,7 +212,7 @@ class WebSocketTransport implements ITransport<WebSocketTransportResult> {
     };
 
     const pendingResults: WebSocketTransportResult[] = [];
-    let nextMessage: ((value: any) => void)|null = null;
+    let nextMessage: ((value: any) => void) | null = null;
 
     const runNextMessage = () => {
       if (nextMessage) {

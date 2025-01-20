@@ -1,0 +1,10 @@
+/target
+/.idea
+upstream
+.cubestore
+dist
+node_modules
+downloaded
+cubestore/target
+cubesql/target
+cubestore-sql-tests/data/**
